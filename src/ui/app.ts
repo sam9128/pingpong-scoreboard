@@ -335,17 +335,24 @@ export class App {
   }
 
   private openSettings(): void {
-    const s = this.state;
-    $('setMeta').textContent =
-      `${BEST_OF_LABEL[this.config.bestOf]} · ${this.config.players[0]} vs ${this.config.players[1]}` +
-      ` · 第 ${s.gameIndex + 1} 局 · 局數 ${s.gamesWon[0]} : ${s.gamesWon[1]}`;
-    ($('setExpedite') as HTMLButtonElement).disabled = !expediteAllowed(s);
+    this.renderSettings();
     this.renderVoiceState();
     this.renderVoiceOptions();
     this.renderVocabFields();
     ($('rngRate') as HTMLInputElement).value = String(this.announcer.rate);
     $('rateVal').textContent = `${this.announcer.rate.toFixed(2)}×`;
     $('settings').hidden = false;
+  }
+
+  /** 面板開著時每次比分變動都要同步，因為復原／重做現在也在裡面。 */
+  private renderSettings(): void {
+    const s = this.state;
+    $('setMeta').textContent =
+      `${BEST_OF_LABEL[this.config.bestOf]} · ${this.config.players[0]} vs ${this.config.players[1]}` +
+      ` · 第 ${s.gameIndex + 1} 局 · 局數 ${s.gamesWon[0]} : ${s.gamesWon[1]}`;
+    ($('setExpedite') as HTMLButtonElement).disabled = !expediteAllowed(s);
+    ($('btnUndo') as HTMLButtonElement).disabled = this.events.length === 0;
+    ($('btnRedo') as HTMLButtonElement).disabled = this.redoStack.length === 0;
   }
 
   private closeSettings(): void {
@@ -434,12 +441,6 @@ export class App {
       }
       if (isButton(e.target) || longFired) return;
       this.addPoint(side);
-    });
-
-    el.addEventListener('pointermove', (e) => {
-      const r = el.getBoundingClientRect();
-      el.style.setProperty('--mx', `${e.clientX - r.left}px`);
-      el.style.setProperty('--my', `${e.clientY - r.top}px`);
     });
 
     const abort = () => {
@@ -670,11 +671,7 @@ export class App {
     $('rallyPanel').hidden = !s.expedite;
     $('rallyCount').textContent = String(this.rally);
 
-    ($('btnUndo') as HTMLButtonElement).disabled = this.events.length === 0;
-    ($('btnRedo') as HTMLButtonElement).disabled = this.redoStack.length === 0;
-    if (!$('settings').hidden) {
-      ($('setExpedite') as HTMLButtonElement).disabled = !expediteAllowed(s);
-    }
+    if (!$('settings').hidden) this.renderSettings();
   }
 
   private paintCourt(suffix: 'L' | 'R', player: PlayerIndex): void {
