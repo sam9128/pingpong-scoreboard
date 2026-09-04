@@ -583,7 +583,7 @@ button.toggle.listening {
 }
 
 .gc-num {
-  font-size: clamp(28px, 6.5vh, 70px);
+  font-size: clamp(40px, 9.5vh, 84px);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.03em;
@@ -599,14 +599,14 @@ button.toggle.listening {
 
 .gc-sep {
   color: rgba(255, 255, 255, 0.25);
-  font-size: clamp(18px, 3.6vh, 40px);
+  font-size: clamp(24px, 6vh, 52px);
   font-weight: 500;
 }
 
 /* ── 比分：畫面主角，維持最大字級 ───────────────────────── */
 
 .score {
-  font-size: clamp(96px, 34vh, 380px);
+  font-size: min(56vh, 21vw);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.04em;
@@ -1180,11 +1180,11 @@ button.toggle.listening {
   }
 
   .score {
-    font-size: clamp(72px, 17vh, 200px);
+    font-size: min(30vh, 46vw);
   }
 
   .gc-num {
-    font-size: clamp(24px, 4.5vh, 52px);
+    font-size: clamp(30px, 6vh, 70px);
   }
 }
 
@@ -1264,7 +1264,7 @@ button.toggle.listening {
 
   /* 比分：手機橫向反而可以吃掉更高比例的畫面高度 */
   .score {
-    font-size: min(42vh, 34vw);
+    font-size: min(52vh, 24vw);
     border-width: 3px;
     border-radius: 20px;
     padding: 2px 14px;
@@ -1278,11 +1278,11 @@ button.toggle.listening {
   }
 
   .gc-num {
-    font-size: 26px;
+    font-size: 34px;
   }
 
   .gc-sep {
-    font-size: 16px;
+    font-size: 20px;
   }
 
   .court-foot {
