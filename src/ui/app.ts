@@ -660,8 +660,7 @@ export class App {
     const left = s.leftPlayer;
     const right = other(left);
 
-    $('gameLabel').textContent = `第 ${s.gameIndex + 1} 局`;
-    $('formatLabel').textContent = BEST_OF_LABEL[this.config.bestOf];
+    $('gameLabel').textContent = `第 ${s.gameIndex + 1} 局 · ${BEST_OF_LABEL[this.config.bestOf]}`;
 
     // 換發模式直接寫出來，免得看不出現在是每 2 分還是每 1 分換發。
     const mode = s.expedite

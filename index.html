@@ -81,29 +81,23 @@
 
     <!-- ── 記分畫面 ───────────────────────────────────────── -->
     <section id="board" class="screen board" hidden>
-      <header class="topbar">
-        <div class="tb-game">
-          <b id="gameLabel">第 1 局</b>
-          <small id="formatLabel">五局三勝</small>
-        </div>
-
-        <span class="tb-mode" id="modeChip">每 2 分換發</span>
-
-        <span class="grow"></span>
-
-        <span class="tb-timer" id="timerLabel">00:00</span>
-        <span class="tb-status" id="statusTts" title="語音播報" role="img" aria-label="語音播報">🔊</span>
-        <span class="tb-status" id="statusStt" title="語音計分" role="img" aria-label="語音計分">🎤</span>
-      </header>
+      <!-- 計時與語音狀態：絕對定位，不佔版面 -->
+      <div class="hud">
+        <span class="hud-timer" id="timerLabel">00:00</span>
+        <span class="hud-status" id="statusTts" title="語音播報" role="img" aria-label="語音播報">🔊</span>
+        <span class="hud-status" id="statusStt" title="語音計分" role="img" aria-label="語音計分">🎤</span>
+      </div>
 
       <main class="courts">
-        <!-- 局數集中在正中央，兩側只留比分，讓分數字級可以拉到最大 -->
-        <div class="games-center" aria-label="局數">
-          <div class="gc-row">
+        <!-- 局數、局次與換發模式集中在正中央上方，絕對定位不影響比分字級 -->
+        <div class="games-center">
+          <span class="gc-game" id="gameLabel">第 1 局 · 五局三勝</span>
+          <div class="gc-row" aria-label="局數">
             <b class="gc-num" id="gamesNumL">0</b>
             <span class="gc-sep">:</span>
             <b class="gc-num" id="gamesNumR">0</b>
           </div>
+          <span class="gc-mode" id="modeChip">每 2 分換發</span>
         </div>
 
         <section class="court" id="courtL">

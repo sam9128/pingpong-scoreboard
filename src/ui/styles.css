@@ -319,133 +319,52 @@ button.ghost:active {
   min-height: 1.2em;
 }
 
-/* ── 頂列 ───────────────────────────────────────────────── */
+/* ── 浮動 HUD：計時與語音狀態 ───────────────────────────── */
 
-.topbar {
+/* 與局數面板一樣絕對定位，不佔版面高度，比分字級因此不受影響。 */
+.hud {
+  position: absolute;
+  top: max(10px, env(safe-area-inset-top));
+  right: max(12px, env(safe-area-inset-right));
+  z-index: 3;
   display: flex;
   align-items: center;
-  gap: clamp(8px, 1.4vw, 16px);
-  padding: clamp(6px, 1vh, 12px) clamp(10px, 1.6vw, 20px);
-  padding-left: max(clamp(10px, 1.6vw, 20px), env(safe-area-inset-left));
-  padding-right: max(clamp(10px, 1.6vw, 20px), env(safe-area-inset-right));
-  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.01));
-  border-bottom: 1px solid var(--border);
+  gap: 10px;
+  pointer-events: none;
 }
 
-.grow {
-  flex: 1;
-}
-
-.tb-game {
-  display: flex;
-  flex-direction: column;
-  line-height: 1.15;
-}
-
-.tb-game b {
-  font-size: clamp(20px, 2.8vw, 34px);
-  font-weight: 600;
-  letter-spacing: -0.03em;
-  background: linear-gradient(to bottom, #fff, rgba(255, 255, 255, 0.72));
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-}
-
-.tb-game small {
+.hud-timer {
   color: var(--fg-muted);
-  font-size: clamp(10px, 1.2vw, 13px);
-  letter-spacing: 0.14em;
-}
-
-/* 換發模式徽章：實心，形態上刻意不同於球權的「外環 + 輝光」 */
-.tb-mode {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  box-shadow: var(--inner-highlight);
-  color: var(--fg-muted);
-  font-size: clamp(11px, 1.4vw, 15px);
-  font-weight: 500;
-  letter-spacing: 0.02em;
-  padding: 8px 18px;
-  white-space: nowrap;
-  transition: background var(--t-quick) var(--ease), color var(--t-quick) var(--ease),
-    box-shadow var(--t-quick) var(--ease);
-}
-
-.tb-mode.alt {
-  background: var(--accent);
-  border-color: transparent;
-  box-shadow: var(--shadow-accent);
-  color: #fff;
-  font-weight: 600;
-}
-
-/* 頂列語音狀態指示燈：只顯示狀態，開關在設定面板 */
-.tb-status {
-  font-size: clamp(13px, 1.6vw, 17px);
-  line-height: 1;
-  opacity: 0.28;
-  filter: grayscale(1);
-  transition: opacity var(--t-quick) var(--ease), filter var(--t-quick) var(--ease);
-}
-
-.tb-status.on {
-  opacity: 1;
-  filter: none;
-}
-
-.tb-status.listening {
-  animation: micPulse 1.6s var(--ease) infinite;
-  border-radius: 50%;
-}
-
-.tb-timer {
-  color: var(--fg-muted);
-  font-size: clamp(15px, 2vw, 24px);
+  font-size: clamp(14px, 1.8vw, 22px);
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.04em;
 }
 
-.chip {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  box-shadow: var(--inner-highlight);
-  color: var(--fg-muted);
-  font-size: clamp(11px, 1.3vw, 14px);
-  padding: 8px 14px;
-  white-space: nowrap;
+/* 語音狀態指示燈：只顯示狀態，開關在設定面板 */
+.hud-status {
+  font-size: clamp(13px, 1.6vw, 17px);
+  line-height: 1;
+  opacity: 0.24;
+  filter: grayscale(1);
+  transition: opacity var(--t-quick) var(--ease), filter var(--t-quick) var(--ease);
 }
 
-button.chip {
-  font-family: inherit;
-  cursor: pointer;
-  transition: background var(--t-quick) var(--ease), color var(--t-quick) var(--ease),
-    box-shadow var(--t-quick) var(--ease), transform var(--t-quick) var(--ease);
+.hud-status.on {
+  opacity: 1;
+  filter: none;
 }
 
-button.chip:active {
-  transform: scale(0.98);
-}
-
-button.toggle[aria-pressed='true'] {
-  background: rgba(94, 106, 210, 0.18);
-  border-color: var(--border-accent);
-  box-shadow: var(--inner-highlight), 0 0 20px rgba(94, 106, 210, 0.18);
-  color: #b9c0f0;
-}
-
-button.toggle.listening {
+.hud-status.listening {
   animation: micPulse 1.6s var(--ease) infinite;
+  border-radius: 50%;
 }
 
 @keyframes micPulse {
   50% {
-    box-shadow: var(--inner-highlight), 0 0 0 5px rgba(94, 106, 210, 0.16);
+    box-shadow: 0 0 0 5px rgba(94, 106, 210, 0.16);
   }
 }
+
 
 /* ── 浮動設定鍵 ─────────────────────────────────────────── */
 
@@ -567,12 +486,44 @@ button.toggle.listening {
   display: flex;
   flex-direction: column;
   align-items: center;
+  gap: clamp(2px, 0.5vh, 6px);
   background: linear-gradient(to bottom, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02));
   border: 1px solid var(--border);
   border-radius: var(--r-lg);
   box-shadow: var(--shadow-card);
-  padding: clamp(5px, 1vh, 12px) clamp(14px, 2vw, 26px);
+  padding: clamp(6px, 1.1vh, 14px) clamp(12px, 1.4vw, 20px);
   backdrop-filter: blur(12px);
+}
+
+.gc-game {
+  color: var(--fg-muted);
+  font-size: clamp(10px, 1.25vw, 14px);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+/* 換發模式：實心徽章，形態上刻意不同於球權的「外框 + 輝光」 */
+.gc-mode {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  box-shadow: var(--inner-highlight);
+  color: var(--fg-muted);
+  font-size: clamp(10px, 1.2vw, 14px);
+  font-weight: 500;
+  padding: 4px 12px;
+  white-space: nowrap;
+  transition: background var(--t-quick) var(--ease), color var(--t-quick) var(--ease),
+    box-shadow var(--t-quick) var(--ease);
+}
+
+.gc-mode.alt {
+  background: var(--accent);
+  border-color: transparent;
+  box-shadow: var(--shadow-accent);
+  color: #fff;
+  font-weight: 600;
 }
 
 .gc-row {
@@ -1179,6 +1130,11 @@ button.toggle.listening {
     transform: translate(-50%, -50%);
   }
 
+  /* 面板落在兩塊球場的交界處，下方球場的名字要讓開它的下半部 */
+  #courtR .court-head {
+    margin-top: clamp(46px, 6vh, 68px);
+  }
+
   .score {
     font-size: min(30vh, 46vw);
   }
@@ -1191,52 +1147,22 @@ button.toggle.listening {
 /* ── 手機橫向：可用高度只有 ~390px，周邊一律讓位給比分 ─── */
 
 @media (orientation: landscape) and (max-height: 500px) {
-  .topbar {
+  .hud {
+    top: max(6px, env(safe-area-inset-top));
     gap: 8px;
-    padding-top: 4px;
-    padding-bottom: 4px;
   }
 
-  .tb-game b {
-    font-size: 19px;
+  .hud-timer {
+    font-size: 13px;
   }
 
-  /* 賽制在頂列已經不是關鍵資訊，讓出垂直空間 */
-  .tb-game small {
-    display: none;
+  .gc-game {
+    font-size: 10px;
   }
 
-  .tb-mode {
-    font-size: 11px;
-    padding: 5px 12px;
-  }
-
-  /* 頂列語音狀態指示燈：只顯示狀態，開關在設定面板 */
-.tb-status {
-  font-size: clamp(13px, 1.6vw, 17px);
-  line-height: 1;
-  opacity: 0.28;
-  filter: grayscale(1);
-  transition: opacity var(--t-quick) var(--ease), filter var(--t-quick) var(--ease);
-}
-
-.tb-status.on {
-  opacity: 1;
-  filter: none;
-}
-
-.tb-status.listening {
-  animation: micPulse 1.6s var(--ease) infinite;
-  border-radius: 50%;
-}
-
-.tb-timer {
-    font-size: 14px;
-  }
-
-  .chip {
-    font-size: 11px;
-    padding: 6px 10px;
+  .gc-mode {
+    font-size: 10px;
+    padding: 3px 9px;
   }
 
   .court {
