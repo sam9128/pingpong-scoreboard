@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+    <meta name="theme-color" content="#050506" />
+    <meta name="description" content="符合 ITTF 規則的乒乓球記分板，支援語音播報與語音計分。" />
+    <link rel="apple-touch-icon" href="./icons/icon-192.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <title>乒乓球記分板</title>
+  </head>
+  <body>
+    <!-- 背景層：漸層底 + 環境光暈 + 網格 + 噪點 -->
+    <div class="bg-layers" aria-hidden="true">
+      <span class="blob blob-1"></span>
+      <span class="blob blob-2"></span>
+      <span class="blob blob-3"></span>
+      <span class="bg-grid"></span>
+      <span class="bg-noise"></span>
+    </div>
+
+    <!-- ── 設定畫面 ───────────────────────────────────────── -->
+    <section id="setup" class="screen setup">
+      <h1>乒乓球記分板</h1>
+      <p class="subtitle">依 ITTF 規則計分 · 換邊 · 輪換發球法 · 語音播報</p>
+
+      <div class="setup-grid">
+        <label class="field">
+          <span>選手 A</span>
+          <input id="inNameA" type="text" value="選手 A" maxlength="12" autocomplete="off" />
+        </label>
+        <label class="field">
+          <span>選手 B</span>
+          <input id="inNameB" type="text" value="選手 B" maxlength="12" autocomplete="off" />
+        </label>
+
+        <fieldset class="field">
+          <legend>賽制</legend>
+          <div class="segmented" id="inBestOf">
+            <button type="button" data-value="3">三局兩勝</button>
+            <button type="button" data-value="5" class="on">五局三勝</button>
+            <button type="button" data-value="7">七局四勝</button>
+          </div>
+        </fieldset>
+
+        <fieldset class="field">
+          <legend>猜先 — 誰先發球</legend>
+          <div class="segmented" id="inFirstServer">
+            <button type="button" data-value="0" class="on">選手 A</button>
+            <button type="button" data-value="1">選手 B</button>
+          </div>
+        </fieldset>
+
+        <fieldset class="field">
+          <legend>第一局 — 選手 A 站在</legend>
+          <div class="segmented" id="inStartingEnd">
+            <button type="button" data-value="0" class="on">左側</button>
+            <button type="button" data-value="1">右側</button>
+          </div>
+        </fieldset>
+      </div>
+
+      <div class="setup-actions">
+        <button id="btnStart" class="primary">開始比賽</button>
+        <button id="btnResume" class="ghost" hidden>繼續上一場</button>
+      </div>
+
+      <p class="hint" id="setupHint"></p>
+    </section>
+
+    <!-- ── 記分畫面 ───────────────────────────────────────── -->
+    <section id="board" class="screen board" hidden>
+      <header class="topbar">
+        <div class="tb-game">
+          <b id="gameLabel">第 1 局</b>
+          <small id="formatLabel">五局三勝</small>
+        </div>
+
+        <span class="tb-mode" id="modeChip">每 2 分換發</span>
+
+        <span class="grow"></span>
+
+        <span class="tb-timer" id="timerLabel">00:00</span>
+        <span class="tb-status" id="statusTts" title="語音播報" role="img" aria-label="語音播報">🔊</span>
+        <span class="tb-status" id="statusStt" title="語音計分" role="img" aria-label="語音計分">🎤</span>
+      </header>
+
+      <main class="courts">
+        <!-- 局數集中在正中央，兩側只留比分，讓分數字級可以拉到最大 -->
+        <div class="games-center" aria-label="局數">
+          <div class="gc-row">
+            <b class="gc-num" id="gamesNumL">0</b>
+            <span class="gc-sep">:</span>
+            <b class="gc-num" id="gamesNumR">0</b>
+          </div>
+        </div>
+
+        <section class="court" id="courtL">
+          <div class="court-head">
+            <span class="id-dot" id="dotL"></span>
+            <span class="name" id="nameL">選手 A</span>
+            <span class="serve-tag" id="serveTagL">發球</span>
+          </div>
+
+          <div class="score" id="scoreL">0</div>
+
+          <div class="court-foot">
+            <button class="timeout-btn" id="btnToL">暫停</button>
+          </div>
+        </section>
+
+        <section class="court" id="courtR">
+          <div class="court-head">
+            <span class="id-dot" id="dotR"></span>
+            <span class="name" id="nameR">選手 B</span>
+            <span class="serve-tag" id="serveTagR">發球</span>
+          </div>
+
+          <div class="score" id="scoreR">0</div>
+
+          <div class="court-foot">
+            <button class="timeout-btn" id="btnToR">暫停</button>
+          </div>
+        </section>
+      </main>
+
+      <section class="rally" id="rallyPanel" hidden>
+        <span class="rally-label">接發方回擊板數</span>
+        <button class="rally-count" id="btnRally"><b id="rallyCount">0</b> / 13</button>
+        <button class="rally-reset" id="btnRallyReset">歸零</button>
+      </section>
+
+      <footer class="bottombar">
+        <button id="btnUndo">↺ 復原</button>
+        <button id="btnRedo">↻ 重做</button>
+        <span class="grow"></span>
+        <button id="btnSettings" aria-haspopup="dialog">⚙<span class="btn-label">設定</span></button>
+      </footer>
+
+      <div class="banner" id="banner" hidden></div>
+      <div class="toast" id="toast" hidden></div>
+    </section>
+
+    <!-- ── 設定面板：進階選項收納於此 ─────────────────────── -->
+    <div class="modal-backdrop" id="settings" hidden>
+      <div class="modal-card settings-card" role="dialog" aria-modal="true" aria-labelledby="setTitle">
+        <h2 id="setTitle">設定</h2>
+
+        <div class="set-group">
+          <div class="switch-row">
+            <span class="switch-text">
+              <b>語音播報</b>
+              <small>得分後依裁判習慣先報發球方分數</small>
+            </span>
+            <button class="switch" id="swTts" role="switch" aria-checked="true">
+              <span class="switch-knob"></span>
+            </button>
+          </div>
+
+          <div class="switch-row">
+            <span class="switch-text">
+              <b>語音計分</b>
+              <small id="sttHint">說「左邊得分」「取消」等指令。需要網路連線。</small>
+            </span>
+            <button class="switch" id="swStt" role="switch" aria-checked="false">
+              <span class="switch-knob"></span>
+            </button>
+          </div>
+        </div>
+
+        <div class="set-group" id="voiceGroup">
+          <div class="set-row">
+            <label class="set-label" for="selVoice">播報聲音</label>
+            <select class="set-select" id="selVoice"></select>
+          </div>
+          <div class="set-row">
+            <label class="set-label" for="rngRate">語速 <b id="rateVal">1.05×</b></label>
+            <input class="set-range" id="rngRate" type="range" min="0.6" max="1.6" step="0.05" />
+          </div>
+          <button class="set-action" id="btnPreview">試聽播報</button>
+        </div>
+
+        <details class="set-details">
+          <summary>自訂語音計分指令</summary>
+          <div class="set-group">
+            <label class="set-field"><span>左方得分</span><input id="vocLeft" type="text" autocomplete="off" /></label>
+            <label class="set-field"><span>右方得分</span><input id="vocRight" type="text" autocomplete="off" /></label>
+            <label class="set-field"><span>撤銷</span><input id="vocUndo" type="text" autocomplete="off" /></label>
+            <label class="set-field"><span>暫停</span><input id="vocTimeout" type="text" autocomplete="off" /></label>
+            <label class="set-field"><span>明確計分詞</span><input id="vocPoint" type="text" autocomplete="off" /></label>
+            <button class="set-action" id="btnVocabReset">還原預設指令</button>
+          </div>
+          <p class="set-note">
+            用「、」或逗號分隔多個說法。句子含「明確計分詞」時一律採信，否則只接受 6 字以內的短句，
+            以免場邊閒聊誤觸。選手姓名永遠可用，不需在此設定。
+          </p>
+        </details>
+
+        <div class="set-group">
+          <button class="set-action" id="setExpedite">啟動輪換發球法</button>
+          <button class="set-action warn" id="setNew">結束並開新比賽</button>
+        </div>
+
+        <p class="set-meta" id="setMeta"></p>
+
+        <div class="modal-actions">
+          <button class="accent" id="setClose">完成</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── 對話框 ─────────────────────────────────────────── -->
+    <div class="modal-backdrop" id="modal" hidden>
+      <div class="modal-card" role="dialog" aria-modal="true">
+        <h2 id="modalTitle"></h2>
+        <p id="modalBody"></p>
+        <div class="modal-actions" id="modalActions"></div>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
