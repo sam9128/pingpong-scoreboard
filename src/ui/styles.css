@@ -1460,6 +1460,66 @@ button.toggle.listening {
   }
 }
 
+/* ── 手機強制橫向 ───────────────────────────────────────── */
+
+/*
+ * 瀏覽器無法真的替使用者轉螢幕：Screen Orientation API 的 lock() 需要先進入
+ * 全螢幕，而 iOS Safari 根本不支援。因此除了 manifest 的 orientation 與
+ * 程式端的 best-effort lock 之外，這裡用一層覆蓋提示作為保證能生效的後備。
+ * 只鎖手機（直向寬度 540px 以下），平板直向仍可正常使用上下分割版面。
+ */
+.rotate-gate {
+  display: none;
+}
+
+@media (orientation: portrait) and (max-width: 540px) {
+  .rotate-gate {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    padding: 32px;
+    background: var(--bg-base);
+    text-align: center;
+  }
+
+  .rotate-icon {
+    font-size: 56px;
+    line-height: 1;
+    animation: rotateHint 2.4s var(--ease) infinite;
+  }
+
+  .rotate-title {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+
+  .rotate-note {
+    margin: 0;
+    color: var(--fg-muted);
+    font-size: 13px;
+    line-height: 1.8;
+  }
+}
+
+@keyframes rotateHint {
+  0%,
+  40%,
+  100% {
+    transform: rotate(0deg);
+  }
+  70%,
+  90% {
+    transform: rotate(90deg);
+  }
+}
+
 /* ── 尊重系統的減少動態設定 ─────────────────────────────── */
 
 @media (prefers-reduced-motion: reduce) {

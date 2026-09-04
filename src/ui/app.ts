@@ -185,6 +185,10 @@ export class App {
     $('setup').hidden = true;
     $('board').hidden = false;
 
+    // 已在全螢幕（或以 PWA 安裝）時可直接鎖定；否則靜默失敗，
+    // 交給 CSS 的轉向提示與設定裡的「全螢幕並鎖定橫向」處理。
+    void lockLandscape();
+
     this.state = reduce(this.config, this.events);
     this.expeditePromptedForGame = -1;
     this.resetGameClock();
@@ -310,6 +314,19 @@ export class App {
       store.savePrefs(this.prefs);
       this.renderVocabFields();
       this.toast('已還原預設指令');
+    });
+
+    $('setFullscreen').addEventListener('click', async () => {
+      try {
+        if (!document.fullscreenElement) {
+          await document.documentElement.requestFullscreen();
+        }
+        const locked = await lockLandscape();
+        this.closeSettings();
+        if (!locked) this.toast('這個瀏覽器不支援鎖定方向，請手動轉為橫向');
+      } catch {
+        this.toast('無法進入全螢幕，請手動轉為橫向');
+      }
     });
 
     $('setExpedite').addEventListener('click', () => {
@@ -907,6 +924,25 @@ function bindSegmented(id: string): void {
     for (const b of group.querySelectorAll('button')) b.classList.remove('on');
     btn.classList.add('on');
   });
+}
+
+/**
+ * 盡力鎖定橫向。
+ *
+ * lock() 在多數瀏覽器要求先進入全螢幕，iOS Safari 則完全不支援，
+ * 因此失敗是常態 —— 回傳成功與否讓呼叫端決定要不要提示使用者。
+ */
+async function lockLandscape(): Promise<boolean> {
+  const orientation = screen.orientation as
+    | (ScreenOrientation & { lock?: (o: string) => Promise<void> })
+    | undefined;
+  if (!orientation?.lock) return false;
+  try {
+    await orientation.lock('landscape');
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function setSegValue(id: string, value: string): void {

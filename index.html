@@ -20,6 +20,16 @@
       <span class="bg-noise"></span>
     </div>
 
+    <!-- 手機直向時擋在最上層，提示轉為橫向 -->
+    <div class="rotate-gate" id="rotateGate">
+      <div class="rotate-icon" aria-hidden="true">📱</div>
+      <p class="rotate-title">請將裝置轉為橫向</p>
+      <p class="rotate-note">
+        記分板需要橫向畫面才能顯示完整比分。<br />
+        若轉了沒反應，請先關閉系統的「螢幕旋轉鎖定」。
+      </p>
+    </div>
+
     <!-- ── 設定畫面 ───────────────────────────────────────── -->
     <section id="setup" class="screen setup">
       <h1>乒乓球記分板</h1>
@@ -198,6 +208,7 @@
         </details>
 
         <div class="set-group">
+          <button class="set-action" id="setFullscreen">全螢幕並鎖定橫向</button>
           <button class="set-action" id="setExpedite">啟動輪換發球法</button>
           <button class="set-action warn" id="setNew">結束並開新比賽</button>
         </div>
