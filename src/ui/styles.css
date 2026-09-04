@@ -135,7 +135,11 @@ body {
   }
 }
 
-/* 64px 技術感網格 */
+/* 64px 技術感網格。
+ *
+ * 格線預設從左上角起算，會與球場中線錯開。用 calc(50% + …) 把貼圖原點推到
+ * 畫面正中央：百分比部分先解出 (寬度 - 64) / 2，再加上 31px 讓其中一條格線
+ * 正好疊在中線那 1px 的分隔線上。 */
 .bg-grid {
   position: absolute;
   inset: 0;
@@ -143,6 +147,7 @@ body {
   background-image: linear-gradient(rgba(255, 255, 255, 1) 1px, transparent 1px),
     linear-gradient(90deg, rgba(255, 255, 255, 1) 1px, transparent 1px);
   background-size: 64px 64px;
+  background-position: calc(50% + 31px) calc(50% + 32px);
 }
 
 /* 噪點：消除大面積漸層的色帶 */
