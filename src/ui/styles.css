@@ -50,6 +50,8 @@
 
   /* ── 動態：一律 expo-out，位移不超過 8px ─────── */
   --ease: cubic-bezier(0.16, 1, 0.3, 1);
+  /* 呼吸這種來回動畫要用對稱曲線，expo-out 會顯得一頓一頓的 */
+  --ease-breath: cubic-bezier(0.45, 0, 0.55, 1);
   --t-quick: 200ms;
   --t-base: 300ms;
 }
@@ -57,6 +59,11 @@
 * {
   box-sizing: border-box;
   -webkit-tap-highlight-color: transparent;
+}
+
+/* 元件自帶的 display 會蓋掉 [hidden] 的預設值，統一在這裡把它拉回來。 */
+[hidden] {
+  display: none !important;
 }
 
 html,
@@ -179,7 +186,7 @@ body {
 
 .setup h1 {
   margin: 0;
-  font-size: clamp(30px, 5vw, 56px);
+  font-size: clamp(48px, 8vw, 92px);
   font-weight: 600;
   letter-spacing: -0.03em;
   background: linear-gradient(to bottom, #fff, rgba(255, 255, 255, 0.7));
@@ -191,7 +198,7 @@ body {
 .subtitle {
   margin: 8px 0 clamp(18px, 3.5vh, 34px);
   color: var(--fg-muted);
-  font-size: clamp(13px, 1.6vw, 16px);
+  font-size: clamp(20px, 2.6vw, 26px);
   line-height: 1.6;
 }
 
@@ -213,7 +220,7 @@ body {
 .field > span,
 .field > legend {
   color: var(--fg-muted);
-  font-size: 12px;
+  font-size: 20px;
   font-weight: 500;
   letter-spacing: 0.12em;
   padding: 0;
@@ -227,7 +234,7 @@ body {
   box-shadow: var(--inner-highlight);
   color: var(--fg);
   font: inherit;
-  font-size: 19px;
+  font-size: 31px;
   padding: 14px 16px;
   transition: border-color var(--t-quick) var(--ease), box-shadow var(--t-quick) var(--ease);
 }
@@ -255,7 +262,7 @@ body {
   box-shadow: var(--inner-highlight);
   color: var(--fg-muted);
   font: inherit;
-  font-size: 16px;
+  font-size: 27px;
   padding: 14px 8px;
   cursor: pointer;
   transition: background var(--t-quick) var(--ease), border-color var(--t-quick) var(--ease),
@@ -285,7 +292,7 @@ button.primary,
 button.ghost {
   border-radius: var(--r-sm);
   font: inherit;
-  font-size: 18px;
+  font-size: 30px;
   font-weight: 600;
   letter-spacing: -0.01em;
   padding: 17px 40px;
@@ -314,9 +321,25 @@ button.ghost:active {
 
 .hint {
   color: var(--fg-muted);
-  font-size: 13px;
+  font-size: 21px;
   margin-top: 16px;
   min-height: 1.2em;
+}
+
+/* 底部正中央的結束對局鍵 */
+.fab-end {
+  left: 50%;
+  right: auto;
+  transform: translateX(-50%);
+}
+
+.fab-end:active {
+  transform: translateX(-50%) scale(0.94);
+}
+
+/* 首頁的設定鍵：設定畫面可捲動，固定在視窗上才不會跟著捲走 */
+.fab-setup {
+  position: fixed;
 }
 
 /* ── 浮動 HUD：計時與語音狀態 ───────────────────────────── */
@@ -333,16 +356,29 @@ button.ghost:active {
   pointer-events: none;
 }
 
+/* 設定鍵併入右上角的 HUD，把右下角空出來給暫停鍵 */
+.hud .fab {
+  position: static;
+  pointer-events: auto;
+  width: calc(var(--score-size) * 0.19);
+  height: calc(var(--score-size) * 0.19);
+  min-width: 38px;
+  min-height: 38px;
+  max-width: 60px;
+  max-height: 60px;
+  font-size: clamp(16px, 2vw, 24px);
+}
+
 .hud-timer {
   color: var(--fg-muted);
-  font-size: clamp(14px, 1.8vw, 22px);
+  font-size: clamp(25px, 3.3vw, 41px);
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.04em;
 }
 
 /* 語音狀態指示燈：只顯示狀態，開關在設定面板 */
 .hud-status {
-  font-size: clamp(13px, 1.6vw, 17px);
+  font-size: clamp(23px, 2.9vw, 32px);
   line-height: 1;
   opacity: 0.24;
   filter: grayscale(1);
@@ -374,8 +410,8 @@ button.ghost:active {
   right: max(12px, env(safe-area-inset-right));
   bottom: max(12px, env(safe-area-inset-bottom));
   z-index: 4;
-  width: 44px;
-  height: 44px;
+  width: 68px;
+  height: 68px;
   display: grid;
   place-items: center;
   background: rgba(10, 10, 12, 0.7);
@@ -385,7 +421,7 @@ button.ghost:active {
   backdrop-filter: blur(12px);
   color: var(--fg-muted);
   font-family: inherit;
-  font-size: 18px;
+  font-size: 30px;
   line-height: 1;
   cursor: pointer;
   opacity: 0.7;
@@ -404,7 +440,10 @@ button.ghost:active {
   padding-left: env(safe-area-inset-left);
   padding-right: env(safe-area-inset-right);
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr auto 1fr;
+  /* 沒有明確列高的話，隱含列會被面板內容撐成 auto，
+     兩側球場就無法填滿高度、比分會擠在上方。 */
+  grid-template-rows: 1fr;
   min-height: 0;
 }
 
@@ -412,129 +451,178 @@ button.ghost:active {
    顏色跟著選手走、不跟著場地走。 */
 .court {
   --player: var(--p2);
+  --court-pad: clamp(6px, 1vw, 18px);
   position: relative;
   display: grid;
-  grid-template-rows: auto 1fr auto;
-  align-items: center;
+  grid-template-rows: 1fr auto 1fr;
   justify-items: center;
-  padding: clamp(6px, 1.4vh, 16px);
+  padding: clamp(6px, 1.4vh, 16px) var(--court-pad);
   cursor: pointer;
   min-height: 0;
   transition: transform var(--t-quick) var(--ease);
 }
 
-#courtL {
-  border-right: 1px solid var(--border);
-}
+/* 分隔線不再需要 —— 中央的局數面板本身就是分界。 */
 
 .court:active {
   transform: scale(0.995);
 }
 
-.court-head {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-height: 40px;
+/* 不顯示選手名。身分改由「從畫面外緣淡入的色暈」承載，
+   顏色與中央面板的局數數字一致，換邊時跟著選手走。 */
+.court::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.16;
+  background-repeat: no-repeat;
+  transition: opacity 600ms var(--ease-breath), background-size 600ms var(--ease-breath);
 }
 
-/* 身分色只用一顆小圓點承載，畫面主體維持單色 */
-.id-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--player);
-  box-shadow: 0 0 12px var(--player);
+/* 色暈往中央多延伸半個球場寬，才不會在欄位邊界被切斷；
+   中央面板 z-index 較高，會正常蓋在色暈之上。 */
+#courtL::before {
+  inset: 0 -50% 0 0;
+  background-image: linear-gradient(to right, var(--player), transparent);
+  background-position: left center;
+  background-size: 40% 100%;
 }
 
-.name {
-  color: var(--fg);
-  font-size: clamp(17px, 2.4vw, 30px);
-  font-weight: 600;
-  letter-spacing: -0.01em;
+#courtR::before {
+  inset: 0 0 0 -50%;
+  background-image: linear-gradient(to left, var(--player), transparent);
+  background-position: right center;
+  background-size: 40% 100%;
 }
 
-/* 球權指示之一：發球方名字旁出現主色標籤 */
-.serve-tag {
-  background: rgba(94, 106, 210, 0.18);
-  border: 1px solid var(--border-accent);
-  border-radius: 999px;
-  box-shadow: var(--inner-highlight);
-  color: #b9c0f0;
-  font-size: clamp(10px, 1.2vw, 14px);
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  padding: 4px 12px;
-  opacity: 0;
-  transform: translateY(-2px);
-  transition: opacity var(--t-quick) var(--ease), transform var(--t-quick) var(--ease);
+/* 球權指示：發球方的色暈加深，並讓「延伸範圍」呼吸（濃度維持不變）。
+   不再使用外框與輝光 —— 色暈本身就是畫面上面積最大的指示。
+   用 background-size 而非漸層停止點，才能在各瀏覽器都平滑補間。 */
+.court.serving::before {
+  opacity: 0.68;
+  /* alternate + 對稱的 ease-in-out：兩端速度歸零，不會像 expo-out 那樣
+     衝出去再急停，也不會在 50% 影格瞬間反向。單程 2.4s、來回約 4.8s。 */
+  animation: serveReachX 2.4s var(--ease-breath) infinite alternate;
 }
 
-.court.serving .serve-tag {
-  opacity: 1;
-  transform: translateY(0);
+@keyframes serveReachX {
+  from {
+    background-size: 54% 100%;
+  }
+  to {
+    background-size: 82% 100%;
+  }
+}
+
+/* 直向版本。@keyframes 一律放頂層，巢狀在 @media 裡容易被處理鏈吃掉後續規則。 */
+@keyframes serveReachY {
+  from {
+    background-size: 100% 54%;
+  }
+  to {
+    background-size: 100% 82%;
+  }
+}
+
+.score {
+  /* 球場是 1fr auto 1fr 三列；移除選手名後只剩比分一個子元素，
+     必須明確放進中間那列，否則會自動落在第一列而貼齊上緣。 */
+  grid-row: 2;
+  position: relative;
+  z-index: 1;
 }
 
 /* ── 中央局數面板 ───────────────────────────────────────── */
 
 .games-center {
-  position: absolute;
-  top: clamp(2px, 0.6vh, 10px);
-  left: 50%;
-  transform: translateX(-50%);
+  align-self: start;
   z-index: 2;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: clamp(2px, 0.5vh, 6px);
-  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02));
-  border: 1px solid var(--border);
+  gap: clamp(1px, 0.35vh, 4px);
+  /* 毛玻璃：底下的身分色暈會透上來，面板因此帶著兩側的顏色 */
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.13), rgba(255, 255, 255, 0.05));
+  backdrop-filter: blur(26px) saturate(150%);
+  -webkit-backdrop-filter: blur(26px) saturate(150%);
+  border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: var(--r-lg);
-  box-shadow: var(--shadow-card);
+  box-shadow: var(--shadow-card), inset 0 1px 0 0 rgba(255, 255, 255, 0.16);
   padding: clamp(6px, 1.1vh, 14px) clamp(12px, 1.4vw, 20px);
-  backdrop-filter: blur(12px);
+}
+
+.gc-head {
+  display: flex;
+  align-items: center;
+  gap: clamp(6px, 0.8vw, 10px);
 }
 
 .gc-game {
   color: var(--fg-muted);
-  font-size: clamp(10px, 1.25vw, 14px);
+  font-size: clamp(16px, 2.1vw, 24px);
   font-weight: 500;
   letter-spacing: 0.02em;
+  line-height: 1.15;
   white-space: nowrap;
 }
 
 /* 換發模式：實心徽章，形態上刻意不同於球權的「外框 + 輝光」 */
 .gc-mode {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  box-shadow: var(--inner-highlight);
-  color: var(--fg-muted);
-  font-size: clamp(10px, 1.2vw, 14px);
-  font-weight: 500;
-  padding: 4px 12px;
-  white-space: nowrap;
-  transition: background var(--t-quick) var(--ease), color var(--t-quick) var(--ease),
-    box-shadow var(--t-quick) var(--ease);
-}
-
-.gc-mode.alt {
   background: var(--accent);
-  border-color: transparent;
+  border: 0;
+  border-radius: 999px;
   box-shadow: var(--shadow-accent);
   color: #fff;
+  font-size: clamp(15px, 1.9vw, 22px);
   font-weight: 600;
+  line-height: 1.15;
+  padding: 2px 10px;
+  white-space: nowrap;
 }
 
+/* 三欄兩列：上排是局數，下排的圓點各自對齊自己那一側的數字。 */
 .gc-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto auto auto;
   align-items: baseline;
-  gap: clamp(6px, 1vw, 14px);
+  justify-items: center;
+  column-gap: clamp(6px, 1vw, 14px);
+  row-gap: clamp(3px, 0.6vh, 7px);
   line-height: 1;
 }
 
+.gc-pips {
+  display: flex;
+  align-self: center;
+  gap: clamp(4px, 0.6vw, 7px);
+}
+
+#pipsL {
+  color: var(--gc-left, var(--p1));
+}
+
+#pipsR {
+  color: var(--gc-right, var(--p2));
+}
+
+.gc-pips .pip {
+  width: calc(var(--score-size) * 0.055);
+  height: calc(var(--score-size) * 0.055);
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  transition: background var(--t-quick) var(--ease), border-color var(--t-quick) var(--ease);
+}
+
+.gc-pips .pip.won {
+  background: currentColor;
+  border-color: currentColor;
+}
+
 .gc-num {
-  font-size: clamp(40px, 9.5vh, 84px);
+  /* 局比分固定為比分的 50%（參考翻牌記分板的比例） */
+  font-size: calc(var(--score-size) * 0.5);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.03em;
@@ -550,21 +638,20 @@ button.ghost:active {
 
 .gc-sep {
   color: rgba(255, 255, 255, 0.25);
-  font-size: clamp(24px, 6vh, 52px);
+  font-size: calc(var(--score-size) * 0.34);
   font-weight: 500;
 }
 
 /* ── 比分：畫面主角，維持最大字級 ───────────────────────── */
 
 .score {
-  font-size: min(56vh, 21vw);
+  font-size: var(--score-size);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.04em;
   line-height: 0.95;
-  padding: clamp(4px, 1vh, 14px) clamp(16px, 3vw, 48px);
-  border: 3px solid transparent;
-  border-radius: 28px;
+  padding: clamp(4px, 1vh, 14px) clamp(8px, 1.2vw, 22px);
+  padding-bottom: calc(clamp(4px, 1vh, 14px) + 2 * var(--score-nudge, 0em));
   background-image: linear-gradient(
     to bottom,
     #fff 0%,
@@ -574,23 +661,7 @@ button.ghost:active {
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
-  transition: border-color var(--t-base) var(--ease), box-shadow var(--t-base) var(--ease),
-    transform var(--t-quick) var(--ease);
-}
-
-/* 球權指示主角：主色外環 + 多層輝光 */
-.court.serving .score {
-  border-color: rgba(94, 106, 210, 0.9);
-  box-shadow: 0 0 0 1px rgba(94, 106, 210, 0.35), 0 8px 40px rgba(0, 0, 0, 0.5),
-    0 0 70px rgba(94, 106, 210, 0.45), inset 0 0 60px rgba(94, 106, 210, 0.14);
-  animation: servePulse 3.2s var(--ease) infinite;
-}
-
-@keyframes servePulse {
-  50% {
-    box-shadow: 0 0 0 6px rgba(94, 106, 210, 0.18), 0 8px 40px rgba(0, 0, 0, 0.5),
-      0 0 110px rgba(94, 106, 210, 0.6), inset 0 0 60px rgba(94, 106, 210, 0.2);
-  }
+  transition: transform var(--t-quick) var(--ease);
 }
 
 /* 得分瞬間的微幅回饋：位移小、時間短，不彈跳 */
@@ -606,11 +677,17 @@ button.ghost:active {
   background-image: linear-gradient(to bottom, #ff9a9d, var(--danger));
 }
 
+/* 暫停鍵改為絕對定位：與局數面板、HUD 一樣不佔版面高度，
+   球場區的可用高度全部留給比分。 */
 .court-foot {
+  position: absolute;
+  left: 50%;
+  bottom: max(10px, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  z-index: 3;
   display: flex;
   gap: 10px;
   align-items: center;
-  min-height: 40px;
 }
 
 .timeout-btn {
@@ -620,7 +697,7 @@ button.ghost:active {
   box-shadow: var(--inner-highlight);
   color: var(--fg-muted);
   font: inherit;
-  font-size: clamp(11px, 1.3vw, 14px);
+  font-size: clamp(20px, 2.3vw, 25px);
   padding: 9px 20px;
   cursor: pointer;
   transition: background var(--t-quick) var(--ease), color var(--t-quick) var(--ease),
@@ -654,7 +731,7 @@ button.ghost:active {
 
 .rally-label {
   color: var(--fg-muted);
-  font-size: clamp(12px, 1.4vw, 15px);
+  font-size: clamp(21px, 2.4vw, 26px);
   letter-spacing: 0.08em;
 }
 
@@ -665,7 +742,7 @@ button.ghost:active {
   box-shadow: var(--shadow-accent);
   color: #fff;
   font: inherit;
-  font-size: clamp(19px, 2.8vw, 30px);
+  font-size: clamp(32px, 4.6vw, 52px);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.02em;
@@ -693,6 +770,9 @@ button.ghost:active {
 
 .board {
   position: relative;
+  /* 比分的基準尺寸。局比分固定為它的 50%，分隔號 34%，圓點 5.5%，
+     因此只要調這一個值，整組比例就跟著走。 */
+  --score-size: min(50vh, 27.5vw);
 }
 
 .banner {
@@ -707,7 +787,7 @@ button.ghost:active {
   box-shadow: var(--shadow-card);
   backdrop-filter: blur(16px);
   color: var(--fg);
-  font-size: clamp(15px, 2.2vw, 28px);
+  font-size: clamp(26px, 3.7vw, 47px);
   font-weight: 600;
   letter-spacing: -0.01em;
   padding: 14px 40px;
@@ -744,7 +824,7 @@ button.ghost:active {
   box-shadow: var(--shadow-card);
   backdrop-filter: blur(16px);
   color: var(--fg);
-  font-size: clamp(12px, 1.4vw, 15px);
+  font-size: clamp(21px, 2.4vw, 26px);
   padding: 10px 22px;
   display: flex;
   gap: 14px;
@@ -791,7 +871,7 @@ button.ghost:active {
 
 .set-label {
   color: var(--fg);
-  font-size: 14px;
+  font-size: 23px;
   white-space: nowrap;
 }
 
@@ -810,7 +890,7 @@ button.ghost:active {
   border-radius: var(--r-sm);
   color: var(--fg);
   font: inherit;
-  font-size: 13px;
+  font-size: 22px;
   padding: 9px 10px;
   cursor: pointer;
 }
@@ -841,8 +921,8 @@ button.ghost:active {
 
 .set-field span {
   color: var(--fg-muted);
-  flex: 0 0 84px;
-  font-size: 13px;
+  flex: 0 0 100px;
+  font-size: 22px;
 }
 
 .set-field input {
@@ -853,7 +933,7 @@ button.ghost:active {
   border-radius: var(--r-sm);
   color: var(--fg);
   font: inherit;
-  font-size: 13px;
+  font-size: 22px;
   padding: 8px 10px;
 }
 
@@ -870,7 +950,7 @@ button.ghost:active {
 .set-details summary {
   color: var(--fg);
   cursor: pointer;
-  font-size: 14px;
+  font-size: 23px;
   padding: 10px 2px;
   list-style: none;
 }
@@ -890,7 +970,7 @@ button.ghost:active {
 
 .set-note {
   color: var(--fg-muted);
-  font-size: 12px;
+  font-size: 21px;
   line-height: 1.6;
   margin: 8px 2px 0;
 }
@@ -926,13 +1006,13 @@ button.ghost:active {
 }
 
 .switch-text b {
-  font-size: 15px;
+  font-size: 24px;
   font-weight: 600;
 }
 
 .switch-text small {
   color: var(--fg-muted);
-  font-size: 12px;
+  font-size: 21px;
   line-height: 1.5;
 }
 
@@ -996,7 +1076,7 @@ button.ghost:active {
   border-top: 1px solid var(--border);
   color: var(--fg);
   font: inherit;
-  font-size: 15px;
+  font-size: 24px;
   padding: 14px 16px;
   text-align: left;
   cursor: pointer;
@@ -1019,7 +1099,7 @@ button.ghost:active {
 
 .set-meta {
   color: var(--fg-muted);
-  font-size: 12px;
+  font-size: 21px;
   margin: 0 0 18px;
 }
 
@@ -1060,7 +1140,7 @@ button.ghost:active {
 
 .modal-card h2 {
   margin: 0 0 12px;
-  font-size: clamp(20px, 2.6vw, 28px);
+  font-size: clamp(32px, 4vw, 46px);
   font-weight: 600;
   letter-spacing: -0.02em;
 }
@@ -1069,7 +1149,7 @@ button.ghost:active {
   color: var(--fg-muted);
   line-height: 1.7;
   margin: 0 0 24px;
-  font-size: clamp(13px, 1.5vw, 16px);
+  font-size: clamp(21px, 2.4vw, 25px);
 }
 
 .modal-actions {
@@ -1085,7 +1165,7 @@ button.ghost:active {
   box-shadow: var(--inner-highlight);
   color: var(--fg);
   font: inherit;
-  font-size: 15px;
+  font-size: 24px;
   padding: 14px 24px;
   cursor: pointer;
   flex: 1;
@@ -1115,115 +1195,142 @@ button.ghost:active {
 /* ── 直向手持 ───────────────────────────────────────────── */
 
 @media (orientation: portrait) {
+  /* 直向時改為上下三列：球場 / 面板 / 球場。
+     面板同樣在版面流裡，因此兩塊球場自然各佔剩下的 1fr，
+     不再需要手動算讓位間距。 */
   .courts {
     grid-template-columns: 1fr;
-    grid-template-rows: 1fr 1fr;
-  }
-
-  #courtL {
-    border-right: 0;
-    border-bottom: 1px solid var(--border);
+    grid-template-rows: 1fr auto 1fr;
   }
 
   .games-center {
-    top: 50%;
-    transform: translate(-50%, -50%);
+    align-self: center;
+    justify-self: center;
   }
 
-  /* 面板落在兩塊球場的交界處，下方球場的名字要讓開它的下半部 */
-  #courtR .court-head {
-    margin-top: clamp(46px, 6vh, 68px);
+  /* 直向時球場上下排列，色暈與呼吸方向都改為縱向 */
+  #courtL::before {
+    inset: 0 0 -50% 0;
+    background-image: linear-gradient(to bottom, var(--player), transparent);
+    background-position: center top;
+    background-size: 100% 40%;
   }
 
-  .score {
-    font-size: min(30vh, 46vw);
+  #courtR::before {
+    inset: -50% 0 0 0;
+    background-image: linear-gradient(to top, var(--player), transparent);
+    background-position: center bottom;
+    background-size: 100% 40%;
   }
 
-  .gc-num {
-    font-size: clamp(30px, 6vh, 70px);
+  .court.serving::before {
+    animation-name: serveReachY;
+  }
+
+  /* 直向時下方球場的暫停鍵也在正下方，結束鍵改靠左避開 */
+  .fab.fab-end {
+    left: max(12px, env(safe-area-inset-left));
+    transform: none;
+  }
+
+  .fab.fab-end:active {
+    transform: scale(0.94);
+  }
+
+  .board {
+    --score-size: min(30vh, 30vw);
   }
 }
 
 /* ── 手機橫向：可用高度只有 ~390px，周邊一律讓位給比分 ─── */
 
 @media (orientation: landscape) and (max-height: 500px) {
+  /* 375px 高的機型上，HUD 每高 1px 就少 2px 給比分：這裡刻意收小 */
   .hud {
     top: max(6px, env(safe-area-inset-top));
-    gap: 8px;
+    gap: 7px;
   }
 
-  .hud-timer {
-    font-size: 13px;
+  .hud-status {
+    font-size: 16px;
   }
 
-  .gc-game {
-    font-size: 10px;
-  }
+  /* 設定鍵併入右上角的 HUD，把右下角空出來給暫停鍵 */
+.hud .fab {
+  position: static;
+  pointer-events: auto;
+  width: calc(var(--score-size) * 0.19);
+  height: calc(var(--score-size) * 0.19);
+  min-width: 38px;
+  min-height: 38px;
+  max-width: 60px;
+  max-height: 60px;
+  font-size: clamp(16px, 2vw, 24px);
+}
 
-  .gc-mode {
-    font-size: 10px;
-    padding: 3px 9px;
+.hud-timer {
+    font-size: 18px;
   }
 
   .court {
     padding: 2px;
   }
 
-  .court-head {
-    min-height: 26px;
-    gap: 8px;
+  .board {
+    --score-size: min(60vh, 28vw);
   }
 
-  .name {
-    font-size: 15px;
-  }
-
-  .id-dot {
-    width: 8px;
-    height: 8px;
-  }
-
-  .serve-tag {
-    font-size: 10px;
-    padding: 3px 9px;
-  }
-
-  /* 比分：手機橫向反而可以吃掉更高比例的畫面高度 */
   .score {
-    font-size: min(52vh, 24vw);
-    border-width: 3px;
-    border-radius: 20px;
     padding: 2px 14px;
+    /* padding 簡寫會蓋掉基準樣式的置中補償，這裡要補回來 */
+    padding-bottom: calc(2px + 2 * var(--score-nudge, 0em));
   }
 
   .games-center {
-    top: 0;
     gap: 0;
     border-radius: 12px;
-    padding: 3px 12px;
+    /* 面板變寬會壓縮到比分，手機上把內距與兩行說明字收緊 */
+    padding: 1px 8px;
   }
 
-  .gc-num {
-    font-size: 34px;
+  .gc-head {
+  display: flex;
+  align-items: center;
+  gap: clamp(6px, 0.8vw, 10px);
+}
+
+.gc-game {
+    font-size: 13px;
+    line-height: 1.05;
+  }
+
+  .gc-mode {
+    font-size: 13px;
+    line-height: 1.05;
+    padding: 2px 8px;
+  }
+
+  .gc-row {
+    row-gap: 2px;
   }
 
   .gc-sep {
-    font-size: 20px;
+    font-size: 25px;
   }
 
-  .court-foot {
-    min-height: 24px;
+  .gc-pips .pip {
+    border-width: 1.5px;
   }
 
   .timeout-btn {
-    font-size: 10px;
+    font-size: 15px;
     padding: 5px 12px;
   }
 
   .fab {
-    width: 36px;
-    height: 36px;
-    font-size: 15px;
+    width: 54px;
+    height: 54px;
+    font-size: 24px;
     right: max(8px, env(safe-area-inset-right));
     bottom: max(8px, env(safe-area-inset-bottom));
   }
@@ -1234,22 +1341,22 @@ button.ghost:active {
   }
 
   .rally-label {
-    font-size: 11px;
+    font-size: 16px;
   }
 
   .rally-count {
-    font-size: 17px;
+    font-size: 28px;
     padding: 5px 18px;
   }
 
   .rally-reset {
-    font-size: 11px;
+    font-size: 16px;
     padding: 5px 12px;
   }
 
   .banner {
     inset: auto 0 40px;
-    font-size: 14px;
+    font-size: 23px;
     padding: 8px 22px;
   }
 
@@ -1259,7 +1366,7 @@ button.ghost:active {
 
   .toast {
     inset: auto 0 6px;
-    font-size: 11px;
+    font-size: 16px;
     padding: 6px 14px;
   }
 
@@ -1275,18 +1382,18 @@ button.ghost:active {
   }
 
   .modal-card h2 {
-    font-size: 17px;
+    font-size: 26px;
     margin-bottom: 6px;
   }
 
   .modal-card p {
-    font-size: 12px;
+    font-size: 16px;
     line-height: 1.55;
     margin-bottom: 14px;
   }
 
   .modal-actions button {
-    font-size: 13px;
+    font-size: 19px;
     padding: 11px 16px;
     min-width: 120px;
   }
@@ -1297,15 +1404,15 @@ button.ghost:active {
   }
 
   .switch-text b {
-    font-size: 13px;
+    font-size: 19px;
   }
 
   .switch-text small {
-    font-size: 11px;
+    font-size: 15px;
   }
 
   .set-action {
-    font-size: 13px;
+    font-size: 19px;
   }
 
   .set-group {
@@ -1325,11 +1432,11 @@ button.ghost:active {
   .set-select,
   .set-field input,
   .set-details summary {
-    font-size: 12px;
+    font-size: 16px;
   }
 
   .set-note {
-    font-size: 11px;
+    font-size: 15px;
   }
 
   /* 大範圍模糊在手機 GPU 上成本偏高，縮小半徑 */
@@ -1343,12 +1450,12 @@ button.ghost:active {
   }
 
   .setup h1 {
-    font-size: 24px;
+    font-size: 39px;
   }
 
   .subtitle {
     margin: 4px 0 12px;
-    font-size: 12px;
+    font-size: 16px;
   }
 
   .setup-grid {
@@ -1361,12 +1468,12 @@ button.ghost:active {
   }
 
   .field input {
-    font-size: 15px;
+    font-size: 24px;
     padding: 9px 12px;
   }
 
   .segmented button {
-    font-size: 13px;
+    font-size: 22px;
     padding: 9px 6px;
   }
 
@@ -1376,13 +1483,13 @@ button.ghost:active {
 
   button.primary,
   button.ghost {
-    font-size: 15px;
+    font-size: 24px;
     padding: 12px 28px;
   }
 
   .hint {
     margin-top: 8px;
-    font-size: 11px;
+    font-size: 15px;
   }
 }
 
@@ -1414,14 +1521,14 @@ button.ghost:active {
   }
 
   .rotate-icon {
-    font-size: 56px;
+    font-size: 72px;
     line-height: 1;
     animation: rotateHint 2.4s var(--ease) infinite;
   }
 
   .rotate-title {
     margin: 0;
-    font-size: 20px;
+    font-size: 32px;
     font-weight: 600;
     letter-spacing: -0.01em;
   }
@@ -1429,7 +1536,7 @@ button.ghost:active {
   .rotate-note {
     margin: 0;
     color: var(--fg-muted);
-    font-size: 13px;
+    font-size: 22px;
     line-height: 1.8;
   }
 }

@@ -77,6 +77,10 @@
       </div>
 
       <p class="hint" id="setupHint"></p>
+
+      <button class="fab fab-setup" id="btnSettingsSetup" aria-haspopup="dialog" aria-label="設定">
+        ⚙
+      </button>
     </section>
 
     <!-- ── 記分畫面 ───────────────────────────────────────── -->
@@ -86,27 +90,11 @@
         <span class="hud-timer" id="timerLabel">00:00</span>
         <span class="hud-status" id="statusTts" title="語音播報" role="img" aria-label="語音播報">🔊</span>
         <span class="hud-status" id="statusStt" title="語音計分" role="img" aria-label="語音計分">🎤</span>
+        <button class="fab" id="btnSettings" aria-haspopup="dialog" aria-label="設定">⚙</button>
       </div>
 
       <main class="courts">
-        <!-- 局數、局次與換發模式集中在正中央上方，絕對定位不影響比分字級 -->
-        <div class="games-center">
-          <span class="gc-game" id="gameLabel">第 1 局 · 五局三勝</span>
-          <div class="gc-row" aria-label="局數">
-            <b class="gc-num" id="gamesNumL">0</b>
-            <span class="gc-sep">:</span>
-            <b class="gc-num" id="gamesNumR">0</b>
-          </div>
-          <span class="gc-mode" id="modeChip">每 2 分換發</span>
-        </div>
-
         <section class="court" id="courtL">
-          <div class="court-head">
-            <span class="id-dot" id="dotL"></span>
-            <span class="name" id="nameL">選手 A</span>
-            <span class="serve-tag" id="serveTagL">發球</span>
-          </div>
-
           <div class="score" id="scoreL">0</div>
 
           <div class="court-foot">
@@ -114,13 +102,26 @@
           </div>
         </section>
 
-        <section class="court" id="courtR">
-          <div class="court-head">
-            <span class="id-dot" id="dotR"></span>
-            <span class="name" id="nameR">選手 B</span>
-            <span class="serve-tag" id="serveTagR">發球</span>
+        <!-- 局數面板是版面中的一欄（直向時為一列），靠上對齊。
+             兩側球場各佔剩下的 1fr，比分因此自然置中於「面板邊界～畫面邊界」之間。 -->
+        <div class="games-center">
+          <div class="gc-head">
+            <span class="gc-game" id="gameLabel">第 1 局</span>
+            <!-- 只在 deuce 與輪換發球法時出現；一般狀況不佔版面 -->
+            <span class="gc-mode" id="modeChip" hidden>每 1 分換發</span>
           </div>
+          <div class="gc-row" aria-label="局數">
+            <b class="gc-num" id="gamesNumL">0</b>
+            <span class="gc-sep">:</span>
+            <b class="gc-num" id="gamesNumR">0</b>
+            <!-- 圓點總數＝取勝所需局數，實心＝已贏局數 -->
+            <span class="gc-pips" id="pipsL"></span>
+            <span></span>
+            <span class="gc-pips" id="pipsR"></span>
+          </div>
+        </div>
 
+        <section class="court" id="courtR">
           <div class="score" id="scoreR">0</div>
 
           <div class="court-foot">
@@ -135,7 +136,7 @@
         <button class="rally-reset" id="btnRallyReset">歸零</button>
       </section>
 
-      <button class="fab" id="btnSettings" aria-haspopup="dialog" aria-label="設定">⚙</button>
+      <button class="fab fab-end" id="btnEnd" aria-label="結束對局">✕</button>
 
       <div class="banner" id="banner" hidden></div>
       <div class="toast" id="toast" hidden></div>
@@ -146,7 +147,7 @@
       <div class="modal-card settings-card" role="dialog" aria-modal="true" aria-labelledby="setTitle">
         <h2 id="setTitle">設定</h2>
 
-        <div class="set-group set-row-actions">
+        <div class="set-group set-row-actions" id="matchActions">
           <button class="set-action" id="btnUndo">↺ 復原上一個動作</button>
           <button class="set-action" id="btnRedo">↻ 重做</button>
         </div>

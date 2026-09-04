@@ -44,6 +44,9 @@ const VOCAB_FIELDS: [keyof Vocabulary, string][] = [
   ['point', 'vocPoint'],
 ];
 
+/** 雙擊判定的時間窗。太長會把連續得分誤判成雙擊，太短則不好按。 */
+const DOUBLE_TAP_MS = 260;
+
 interface ModalAction {
   label: string;
   accent?: boolean;
@@ -136,6 +139,8 @@ export class App {
     setSegValue('inStartingEnd', String(this.prefs.startingEnd));
     syncNames();
 
+    $('btnSettingsSetup').addEventListener('click', () => this.openSettings());
+
     $('inNameA').addEventListener('input', syncNames);
     $('inNameB').addEventListener('input', syncNames);
 
@@ -193,6 +198,7 @@ export class App {
     this.expeditePromptedForGame = -1;
     this.resetGameClock();
     this.render();
+    this.calibrateScoreCentering();
     this.persist();
 
     if (this.tickHandle === 0) {
@@ -231,6 +237,7 @@ export class App {
     $('btnUndo').addEventListener('click', () => this.undo());
     $('btnRedo').addEventListener('click', () => this.redo());
     $('btnSettings').addEventListener('click', () => this.openSettings());
+    $('btnEnd').addEventListener('click', () => this.confirmNewMatch());
 
     $('btnRally').addEventListener('click', () => this.bumpRally());
     $('btnRallyReset').addEventListener('click', () => {
@@ -352,13 +359,50 @@ export class App {
   }
 
   private openSettings(): void {
-    this.renderSettings();
+    // 首頁也能開設定，但比賽相關的項目此時無意義，一律隱藏。
+    const inMatch = !$('board').hidden;
+    $('matchActions').hidden = !inMatch;
+    $('setExpedite').hidden = !inMatch;
+    $('setNew').hidden = !inMatch;
+    $('setMeta').hidden = !inMatch;
+    if (inMatch) this.renderSettings();
+
     this.renderVoiceState();
     this.renderVoiceOptions();
     this.renderVocabFields();
     ($('rngRate') as HTMLInputElement).value = String(this.announcer.rate);
     $('rateVal').textContent = `${this.announcer.rate.toFixed(2)}×`;
     $('settings').hidden = false;
+  }
+
+  /**
+   * 數字的墨跡在字框裡天生偏下 —— 字型的 ascender 比 descender 高，
+   * 而數字沒有下伸部，所以下方永遠空一截。這裡用 canvas 量出該字型的
+   * 實際 metrics，換算成 em 寫進 --score-nudge，讓比分在球權外框裡真正置中。
+   * 字型換了（例如裝置沒有 Inter 而回退到系統中文字體）也會自動修正。
+   */
+  private calibrateScoreCentering(): void {
+    const el = $('scoreL');
+    const cs = getComputedStyle(el);
+    const size = parseFloat(cs.fontSize);
+    if (!size) return;
+
+    const ctx = document.createElement('canvas').getContext('2d');
+    if (!ctx) return;
+    ctx.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+    const m = ctx.measureText('0');
+
+    const fontAsc = m.fontBoundingBoxAscent;
+    const fontDesc = m.fontBoundingBoxDescent;
+    const inkAsc = m.actualBoundingBoxAscent;
+    const inkDesc = m.actualBoundingBoxDescent;
+    if (![fontAsc, fontDesc, inkAsc, inkDesc].every((v) => typeof v === 'number' && isFinite(v))) {
+      return;
+    }
+
+    // 墨跡中心相對於字框中心的偏移量（正值代表偏下）。
+    const offset = (fontAsc - fontDesc - (inkAsc - inkDesc)) / 2;
+    document.documentElement.style.setProperty('--score-nudge', `${offset / size}em`);
   }
 
   /** 面板開著時每次比分變動都要同步，因為復原／重做現在也在裡面。 */
@@ -434,39 +478,33 @@ export class App {
     this.announcer.say(`8 比 5，${names[0]} 發球，局點`, { interrupt: true });
   }
 
-  /** 短按 = 該側加 1 分；長按 = 該側減 1 分（僅限本局，不會回溯到上一局）。 */
+  /**
+   * 單擊 = 該側加 1 分；雙擊 = 該側減 1 分（僅限本局，不會回溯到上一局）。
+   *
+   * 第一下會立刻加分以保留即時回饋，因此雙擊時要收回那一分再多扣一分，
+   * 淨效果才是使用者預期的「減 1 分」。
+   */
   private bindCourt(el: HTMLElement, side: Side): void {
-    let timer = 0;
-    let longFired = false;
+    let lastTapAt = 0;
+    // 雙擊第一下之前的事件串：取消扣分時要還原到「整個雙擊手勢之前」。
+    let beforeGesture: MatchEvent[] = [];
 
     const isButton = (t: EventTarget | null) => t instanceof HTMLElement && t.closest('button');
 
-    el.addEventListener('pointerdown', (e) => {
-      if (isButton(e.target)) return;
-      longFired = false;
-      timer = window.setTimeout(() => {
-        longFired = true;
-        timer = 0;
-        this.removePoint(side);
-      }, 650);
-    });
-
     el.addEventListener('pointerup', (e) => {
-      if (timer) {
-        clearTimeout(timer);
-        timer = 0;
+      if (isButton(e.target)) return;
+
+      const now = Date.now();
+      if (now - lastTapAt <= DOUBLE_TAP_MS) {
+        lastTapAt = 0;
+        this.removePoint(side, 2, beforeGesture);
+        return;
       }
-      if (isButton(e.target) || longFired) return;
+      lastTapAt = now;
+      beforeGesture = [...this.events];
       this.addPoint(side);
     });
 
-    const abort = () => {
-      if (timer) clearTimeout(timer);
-      timer = 0;
-      longFired = true;
-    };
-    el.addEventListener('pointercancel', abort);
-    el.addEventListener('pointerleave', abort);
     el.addEventListener('contextmenu', (e) => e.preventDefault());
   }
 
@@ -505,21 +543,42 @@ export class App {
     this.commit({ type: 'POINT', player, source });
   }
 
-  /** 該側減 1 分：移除本局中該選手最後一次得分，用於修正誤觸。 */
-  private removePoint(side: Side): void {
+  /**
+   * 移除本局中該選手最後 count 次得分，用於修正誤觸。
+   * 雙擊會傳 2：一分是雙擊自己第一下加上去的，另一分才是真正要扣的。
+   */
+  private removePoint(side: Side, count = 1, restoreTo?: readonly MatchEvent[]): void {
     const player = side === 'left' ? this.state.leftPlayer : other(this.state.leftPlayer);
     const start = this.indexOfCurrentGameStart();
-    for (let i = this.events.length - 1; i >= start; i--) {
+    const snapshot = [...(restoreTo ?? this.events)];
+    let removed = 0;
+
+    for (let i = this.events.length - 1; i >= start && removed < count; i--) {
       const ev = this.events[i];
       if (ev && ev.type === 'POINT' && ev.player === player) {
         this.events.splice(i, 1);
-        this.redoStack = [];
-        this.apply();
-        this.toast(`${this.config.players[player]} −1 分`);
-        return;
+        removed++;
       }
     }
-    this.toast('本局沒有可扣除的分數');
+
+    if (removed === 0) {
+      this.toast('本局沒有可扣除的分數');
+      return;
+    }
+
+    this.redoStack = [];
+    this.announcer.cancel();
+    this.apply();
+
+    // 快速連續得分有機會被誤判成雙擊，所以留一個一鍵還原的出口。
+    this.toast(`${this.config.players[player]} −${count === 2 ? 1 : removed} 分`, {
+      label: '取消扣分',
+      onClick: () => {
+        this.events = snapshot;
+        this.redoStack = [];
+        this.apply();
+      },
+    });
   }
 
   /** 找出目前這一局的第一個事件位置，讓扣分不會影響到已完成的局。 */
@@ -660,17 +719,13 @@ export class App {
     const left = s.leftPlayer;
     const right = other(left);
 
-    $('gameLabel').textContent = `第 ${s.gameIndex + 1} 局 · ${BEST_OF_LABEL[this.config.bestOf]}`;
+    // 賽制不再寫成文字，改由中央面板的圓點總數表達。
+    $('gameLabel').textContent = `第 ${s.gameIndex + 1} 局`;
 
-    // 換發模式直接寫出來，免得看不出現在是每 2 分還是每 1 分換發。
-    const mode = s.expedite
-      ? '輪換發球法 · 每 1 分換發'
-      : s.isDeuce
-        ? '10:10 · 每 1 分換發'
-        : '每 2 分換發';
-    const modeChip = $('modeChip');
-    modeChip.textContent = mode;
-    modeChip.classList.toggle('alt', s.expedite || s.isDeuce);
+    // 「每 2 分換發」是常態，不值得常駐佔版面；只有 deuce 與輪換發球法
+    // 這兩個例外狀態才亮出徽章。徽章不寫原因：10:10 比分本身就看得到，
+    // 輪換發球法則有底部常駐的 13 板計數列，寫上去只會把面板撐寬到壓住選手名。
+    $('modeChip').hidden = !(s.expedite || s.isDeuce);
 
     // 局數集中在中央面板，顏色跟著左右兩側目前是哪位選手走。
     const gc = document.querySelector<HTMLElement>('.games-center');
@@ -680,6 +735,8 @@ export class App {
     }
     $('gamesNumL').textContent = String(s.gamesWon[left]);
     $('gamesNumR').textContent = String(s.gamesWon[right]);
+    renderPips($('pipsL'), s.gamesWon[left], s.gamesNeeded);
+    renderPips($('pipsR'), s.gamesWon[right], s.gamesNeeded);
 
     this.paintCourt('L', left);
     this.paintCourt('R', right);
@@ -694,8 +751,6 @@ export class App {
     const s = this.state;
     const court = $(`court${suffix}`);
     court.style.setProperty('--player', player === 0 ? 'var(--p1)' : 'var(--p2)');
-
-    $(`name${suffix}`).textContent = this.config.players[player];
 
     const score = $(`score${suffix}`);
     if (score.textContent !== String(s.points[player])) {
@@ -884,9 +939,9 @@ export class App {
   }
 
   private confirmNewMatch(): void {
-    this.showModal('開始新比賽？', '目前這場比賽的所有記錄會被清除，且無法復原。', [
+    this.showModal('結束目前比賽？', '這場比賽的所有記錄會被清除，且無法復原。', [
       {
-        label: '確定，重新開始',
+        label: '確定，結束並重新開始',
         accent: true,
         onClick: () => {
           this.closeModal();
@@ -942,6 +997,17 @@ async function lockLandscape(): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+/** 圓點總數＝取勝所需局數，實心＝已贏局數。 */
+function renderPips(host: HTMLElement, won: number, needed: number): void {
+  host.replaceChildren(
+    ...Array.from({ length: needed }, (_, i) => {
+      const dot = document.createElement('span');
+      dot.className = i < won ? 'pip won' : 'pip';
+      return dot;
+    }),
+  );
 }
 
 function setSegValue(id: string, value: string): void {
