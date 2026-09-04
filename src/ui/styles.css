@@ -437,8 +437,9 @@ button.ghost:active {
 .courts {
   position: relative;
   flex: 1;
-  padding-left: env(safe-area-inset-left);
-  padding-right: env(safe-area-inset-right);
+  /* 刻意不在這裡留安全區內距 —— 一旦把整個格線往內推，兩側的色暈就會在
+     鏡頭挖孔那一側停在內距邊界，露出一條沒上色的黑邊。安全區改由 .court
+     的內距處理，色暈仍然滿版延伸到實體螢幕邊緣。 */
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   /* 沒有明確列高的話，隱含列會被面板內容撐成 auto，
@@ -460,6 +461,17 @@ button.ghost:active {
   cursor: pointer;
   min-height: 0;
   transition: transform var(--t-quick) var(--ease);
+}
+
+/* 瀏海／鏡頭挖孔：內距一律左右對稱。暫停鍵是絕對定位在 padding box 的 50%，
+   而比分置中於 content box，只有對稱時兩者的中心才會重合。
+   ::before 的色暈同樣定位於 padding box，不受這層內距影響。 */
+#courtL {
+  padding-inline: max(var(--court-pad), env(safe-area-inset-left));
+}
+
+#courtR {
+  padding-inline: max(var(--court-pad), env(safe-area-inset-right));
 }
 
 /* 分隔線不再需要 —— 中央的局數面板本身就是分界。 */
@@ -770,9 +782,16 @@ button.ghost:active {
 
 .board {
   position: relative;
+  /* 挖孔吃掉的左右寬度要先扣掉，否則比分會被推到鏡頭底下。
+     沒有挖孔的裝置上 --safe-x 為 0，數值與原本完全相同。 */
+  --safe-x: max(env(safe-area-inset-left), env(safe-area-inset-right));
+  --safe-y: max(env(safe-area-inset-top), env(safe-area-inset-bottom));
+  --usable-w: calc(100vw - 2 * var(--safe-x));
+  --usable-h: calc(100dvh - 2 * var(--safe-y));
+
   /* 比分的基準尺寸。局比分固定為它的 50%，分隔號 34%，圓點 5.5%，
      因此只要調這一個值，整組比例就跟著走。 */
-  --score-size: min(50vh, 27.5vw);
+  --score-size: min(calc(var(--usable-h) * 0.5), calc(var(--usable-w) * 0.275));
 }
 
 .banner {
@@ -1238,7 +1257,7 @@ button.ghost:active {
   }
 
   .board {
-    --score-size: min(30vh, 30vw);
+    --score-size: min(calc(var(--usable-h) * 0.3), calc(var(--usable-w) * 0.3));
   }
 }
 
@@ -1273,11 +1292,13 @@ button.ghost:active {
   }
 
   .court {
-    padding: 2px;
+    /* 左右交給 #courtL / #courtR 的安全區內距，這裡只收上下 */
+    padding-block: 2px;
+    --court-pad: 2px;
   }
 
   .board {
-    --score-size: min(60vh, 28vw);
+    --score-size: min(calc(var(--usable-h) * 0.6), calc(var(--usable-w) * 0.28));
   }
 
   .score {

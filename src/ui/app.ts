@@ -190,9 +190,10 @@ export class App {
     $('setup').hidden = true;
     $('board').hidden = false;
 
-    // 已在全螢幕（或以 PWA 安裝）時可直接鎖定；否則靜默失敗，
-    // 交給 CSS 的轉向提示與設定裡的「全螢幕並鎖定橫向」處理。
-    void lockLandscape();
+    // 全螢幕是兩件事的前提：Android 只有在全螢幕或已安裝的 PWA 才會把畫面
+    // 畫進鏡頭挖孔區，否則系統一律補上黑邊；orientation.lock() 也多半要求
+    // 全螢幕。這裡仍在「開始比賽」的使用者手勢中，失敗就靜默略過。
+    void enterFullscreenAndLock();
 
     this.state = reduce(this.config, this.events);
     this.expeditePromptedForGame = -1;
@@ -986,6 +987,24 @@ function bindSegmented(id: string): void {
  * lock() 在多數瀏覽器要求先進入全螢幕，iOS Safari 則完全不支援，
  * 因此失敗是常態 —— 回傳成功與否讓呼叫端決定要不要提示使用者。
  */
+/**
+ * 進入全螢幕並鎖定橫向。
+ *
+ * 只在觸控裝置自動全螢幕 —— 桌機用一般視窗看板面是正常用法，不該因為按下
+ * 「開始比賽」就被搶進全螢幕。被擋下不影響計分，設定裡仍有手動入口。
+ */
+async function enterFullscreenAndLock(): Promise<void> {
+  const touch = window.matchMedia('(pointer: coarse)').matches;
+  try {
+    if (touch && !document.fullscreenElement) {
+      await document.documentElement.requestFullscreen({ navigationUI: 'hide' });
+    }
+  } catch {
+    /* 使用者手勢過期或瀏覽器政策擋下都屬正常，靜默略過。 */
+  }
+  await lockLandscape();
+}
+
 async function lockLandscape(): Promise<boolean> {
   const orientation = screen.orientation as
     | (ScreenOrientation & { lock?: (o: string) => Promise<void> })
