@@ -152,13 +152,22 @@ export interface VoiceScorerOptions {
   getNames: () => [string, string];
   getVocab: () => Vocabulary;
   onCommand: (cmd: VoiceCommand, transcript: string) => void;
-  onStatus: (status: { listening: boolean; message?: string }) => void;
+  /**
+   * active = 使用者的意向（開著沒），listening = 此刻真的在收音。
+   * 播報期間 listening 會短暫轉 false，active 不變 —— 指示燈要看 active，
+   * 否則每報一次分就熄一次。
+   */
+  onStatus: (status: { active: boolean; listening: boolean; message?: string }) => void;
+  /** 麥克風權限被拒絕。只有這種「使用者做的決定」才該寫回偏好。 */
+  onDenied?: () => void;
 }
 
 /** 連續辨識期間，兩個指令之間的最短間隔，避免同一句話被重複判成兩分。 */
 const COOLDOWN_MS = 900;
 /** 辨識服務自行結束後多快接回去。夠短才不會在語句之間漏聽。 */
 const RESTART_MS = 250;
+/** 播報結束後再忽略一小段，把還在空氣裡的尾音吃掉。 */
+const MUTE_TAIL_MS = 350;
 
 export class VoiceScorer {
   readonly supported: boolean;
@@ -166,7 +175,15 @@ export class VoiceScorer {
   private ctor = getCtor();
   private rec: SpeechRecognitionLike | null = null;
   private wanted = false;
-  private paused = false;
+  /**
+   * 播報期間「不採信」而不是「關掉」麥克風。
+   *
+   * 關掉再開，Android 每次 start() 都會播一次系統提示音 —— 一分一次，
+   * 這是提示音最主要的來源。收音一路開著、只把播報期間的辨識結果丟掉，
+   * 一樣不會把自己的播報聽成指令，卻少掉每一分的那一聲。
+   */
+  private muted = false;
+  private unmuteTimer: number | null = null;
   private lastAcceptedAt = 0;
   private restartTimer: number | null = null;
 
@@ -174,8 +191,18 @@ export class VoiceScorer {
     this.supported = this.ctor !== null;
   }
 
+  /** 使用者的意向：語音計分是不是開著。播報期間不會變。 */
+  get active(): boolean {
+    return this.wanted;
+  }
+
+  /** 此刻是不是在採信聽到的話。播報期間為 false（但麥克風沒有關）。 */
   get listening(): boolean {
-    return this.wanted && !this.paused;
+    return this.wanted && !this.muted;
+  }
+
+  private notify(message?: string): void {
+    this.opts.onStatus({ active: this.wanted, listening: this.listening, message });
   }
 
   toggle(): void {
@@ -185,37 +212,53 @@ export class VoiceScorer {
 
   start(): void {
     if (!this.supported) {
-      this.opts.onStatus({ listening: false, message: '這個瀏覽器不支援語音辨識' });
+      this.notify('這個瀏覽器不支援語音辨識');
       return;
     }
     this.wanted = true;
     this.spinUp();
-    this.opts.onStatus({ listening: true });
+    this.notify();
   }
 
   stop(): void {
     this.wanted = false;
+    this.clearUnmute();
+    this.muted = false;
     this.clearRestart();
     this.tearDown();
-    this.opts.onStatus({ listening: false });
+    this.notify();
   }
 
-  /** 播報期間暫停收音，避免把自己的播報聽成指令。 */
+  /** 播報期間不採信聽到的話。麥克風保持開著，避免每一分都響一次提示音。 */
   pause(): void {
-    if (this.paused) return;
-    this.paused = true;
-    this.clearRestart();
-    this.tearDown();
+    this.clearUnmute();
+    if (this.muted) return;
+    this.muted = true;
+    this.notify();
   }
 
   resume(): void {
-    if (!this.paused) return;
-    this.paused = false;
-    if (this.wanted) this.scheduleRestart(RESTART_MS);
+    if (!this.muted || this.unmuteTimer !== null) return;
+    // 播報的尾音還在空氣裡，再忽略一小段才開始採信。
+    this.unmuteTimer = window.setTimeout(() => {
+      this.unmuteTimer = null;
+      this.muted = false;
+      // 這段期間辨識服務若自行結束過，這裡把它接回來。
+      if (this.wanted && !this.rec) this.scheduleRestart(RESTART_MS);
+      this.notify();
+    }, MUTE_TAIL_MS);
+  }
+
+  private clearUnmute(): void {
+    if (this.unmuteTimer !== null) {
+      clearTimeout(this.unmuteTimer);
+      this.unmuteTimer = null;
+    }
   }
 
   private spinUp(): void {
-    if (!this.ctor || this.rec || !this.wanted || this.paused) return;
+    // 刻意不看 muted：播報期間也讓收音一路開著，才不會一分響一次提示音。
+    if (!this.ctor || this.rec || !this.wanted) return;
     const rec = new this.ctor();
     rec.lang = 'zh-TW';
     rec.continuous = true;
@@ -228,9 +271,10 @@ export class VoiceScorer {
       const err = e.error ?? '';
       if (err === 'not-allowed' || err === 'service-not-allowed') {
         this.wanted = false;
-        this.opts.onStatus({ listening: false, message: '麥克風權限被拒絕' });
+        this.opts.onDenied?.();
+        this.notify('麥克風權限被拒絕');
       } else if (err === 'network') {
-        this.opts.onStatus({ listening: this.listening, message: '語音辨識需要網路連線' });
+        this.notify('語音辨識需要網路連線');
       }
     };
 
@@ -239,7 +283,7 @@ export class VoiceScorer {
       // continuous 在行動裝置上形同虛設：辨識服務靜音幾秒就會自行結束。
       // 只要使用者沒關就立刻接回去，讓收音在時間上盡量連續 —— 唯一該中斷
       // 收音的理由是播報，其餘一律無縫接上。
-      if (this.wanted && !this.paused) this.scheduleRestart(RESTART_MS);
+      if (this.wanted) this.scheduleRestart(RESTART_MS);
     };
 
     this.rec = rec;
@@ -253,6 +297,8 @@ export class VoiceScorer {
   }
 
   private handleResult(e: SpeechRecognitionEventLike): void {
+    // 播報期間照收不誤，只是一律不採信 —— 否則會把自己的播報聽成指令。
+    if (this.muted) return;
     if (Date.now() - this.lastAcceptedAt < COOLDOWN_MS) return;
     const names = this.opts.getNames();
     const vocab = this.opts.getVocab();

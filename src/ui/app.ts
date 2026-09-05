@@ -93,11 +93,16 @@ export class App {
       getNames: () => this.config.players,
       getVocab: () => this.prefs.vocab,
       onCommand: (cmd, transcript) => this.onVoiceCommand(cmd, transcript),
-      onStatus: ({ listening, message }) => {
-        this.prefs.stt = listening;
-        store.savePrefs(this.prefs);
+      // 偏好只在「使用者自己按了開關」與「權限被拒絕」時才寫回。
+      // 結束對局會呼叫 voice.stop()，那是收拾場面、不是使用者關掉它 ——
+      // 之前在這裡寫偏好，等於每打完一場就把自動開啟的設定清掉一次。
+      onStatus: ({ message }) => {
         this.renderVoiceState();
         if (message) this.toast(message);
+      },
+      onDenied: () => {
+        this.prefs.stt = false;
+        store.savePrefs(this.prefs);
       },
     });
 
@@ -320,11 +325,13 @@ export class App {
       return;
     }
 
-    const turningOn = !this.voice.listening;
+    const turningOn = !this.voice.active;
     this.voice.toggle();
+    this.prefs.stt = this.voice.active;
+    store.savePrefs(this.prefs);
     // 行動裝置的辨識服務靜音幾秒就自行結束，每次重啟系統都會播提示音。
     // 這無法從網頁端關掉，講清楚比讓使用者以為壞掉好。
-    if (turningOn && this.voice.listening && window.matchMedia('(pointer: coarse)').matches) {
+    if (turningOn && this.voice.active && window.matchMedia('(pointer: coarse)').matches) {
       this.toast('行動裝置每次重新收音會有系統提示音，屬正常現象');
     }
   }
@@ -544,14 +551,15 @@ export class App {
   private renderVoiceState(): void {
     const tts = this.announcer.enabled;
     // 首頁還沒開始收音，顯示的是「進比賽後要不要開」的意向。
-    const stt = $('board').hidden ? this.prefs.stt : this.voice.listening;
+    const stt = $('board').hidden ? this.prefs.stt : this.voice.active;
 
     $('swTts').setAttribute('aria-checked', String(tts));
     $('swStt').setAttribute('aria-checked', String(stt));
 
     $('statusTts').classList.toggle('on', tts);
     $('statusStt').classList.toggle('on', stt);
-    $('statusStt').classList.toggle('listening', stt);
+    // 脈動代表「此刻真的在收音」；播報期間會暫停，但燈仍然亮著。
+    $('statusStt').classList.toggle('listening', this.voice.listening);
 
     // 首頁右上的快速開關
     for (const [id, on] of [
