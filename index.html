@@ -32,8 +32,39 @@
 
     <!-- ── 設定畫面 ───────────────────────────────────────── -->
     <section id="setup" class="screen setup">
-      <h1>乒乓球記分板</h1>
-      <p class="subtitle">依 ITTF 規則計分 · 換邊 · 輪換發球法 · 語音播報</p>
+      <header class="setup-head">
+        <div class="setup-title">
+          <h1>乒乓球記分板</h1>
+          <p class="subtitle">依 ITTF 規則計分 · 換邊 · 輪換發球法 · 語音播報</p>
+        </div>
+
+        <!-- 播報／辨識的快速開關，加上設定鍵 -->
+        <div class="setup-hud">
+          <button
+            class="fab fab-toggle"
+            id="btnTtsQuick"
+            role="switch"
+            aria-checked="true"
+            aria-label="語音播報"
+            title="語音播報"
+          >
+            🔊
+          </button>
+          <button
+            class="fab fab-toggle"
+            id="btnSttQuick"
+            role="switch"
+            aria-checked="true"
+            aria-label="語音計分"
+            title="語音計分"
+          >
+            🎤
+          </button>
+          <button class="fab" id="btnSettingsSetup" aria-haspopup="dialog" aria-label="設定">
+            ⚙
+          </button>
+        </div>
+      </header>
 
       <div class="setup-grid">
         <label class="field">
@@ -69,18 +100,15 @@
             <button type="button" data-value="1">右側</button>
           </div>
         </fieldset>
-      </div>
 
-      <div class="setup-actions">
-        <button id="btnStart" class="primary">開始比賽</button>
-        <button id="btnResume" class="ghost" hidden>繼續上一場</button>
+        <!-- 動作鍵是格線的第六格，因此與前面的欄位同一列 -->
+        <div class="field setup-actions">
+          <button id="btnStart" class="primary">開始比賽</button>
+          <button id="btnResume" class="ghost" hidden>繼續上一場</button>
+        </div>
       </div>
 
       <p class="hint" id="setupHint"></p>
-
-      <button class="fab fab-setup" id="btnSettingsSetup" aria-haspopup="dialog" aria-label="設定">
-        ⚙
-      </button>
 
       <span class="setup-version" id="setupVersion"></span>
     </section>

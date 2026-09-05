@@ -125,7 +125,14 @@ export class App {
       if (!$('settings').hidden) this.renderVoiceDiag();
     };
 
+    // 讀回來時可能剛套用過新版預設（例如語音計分改為預設開啟），
+    // 存一次讓 schema 定下來，之後就不會再被覆蓋。
+    store.savePrefs(this.prefs);
+
     $('setupVersion').textContent = __BUILD_ID__;
+    $('btnTtsQuick').addEventListener('click', () => this.toggleTts());
+    $('btnSttQuick').addEventListener('click', () => this.toggleStt());
+    if (!this.voice.supported) $<HTMLButtonElement>('btnSttQuick').disabled = true;
 
     this.bindSetup();
     this.bindBoard();
@@ -284,27 +291,45 @@ export class App {
   // ── 設定面板 ────────────────────────────────────────────
 
   private bindSettings(): void {
-    $('swTts').addEventListener('click', () => {
-      this.announcer.enabled = !this.announcer.enabled;
-      if (this.announcer.enabled) this.announcer.unlock();
-      else this.announcer.cancel();
-      this.prefs.tts = this.announcer.enabled;
+    $('swTts').addEventListener('click', () => this.toggleTts());
+    $('swStt').addEventListener('click', () => this.toggleStt());
+    this.bindVoiceSettings();
+  }
+
+  /** 播報開關。設定面板與首頁的快速鍵共用。 */
+  private toggleTts(): void {
+    this.announcer.enabled = !this.announcer.enabled;
+    if (this.announcer.enabled) this.announcer.unlock();
+    else this.announcer.cancel();
+    this.prefs.tts = this.announcer.enabled;
+    store.savePrefs(this.prefs);
+    this.renderVoiceState();
+  }
+
+  /** 語音計分開關。設定面板與首頁的快速鍵共用。 */
+  private toggleStt(): void {
+    // 借這一下使用者手勢解鎖 iOS 的語音合成。
+    this.announcer.unlock();
+
+    // 首頁只切換偏好，收音等進入比賽才開始 —— 否則光是設定選手名字的時間
+    // 就會一直聽到麥克風的提示音。
+    if ($('board').hidden) {
+      this.prefs.stt = !this.prefs.stt;
       store.savePrefs(this.prefs);
       this.renderVoiceState();
-    });
+      return;
+    }
 
-    $('swStt').addEventListener('click', () => {
-      // 借這一下使用者手勢解鎖 iOS 的語音合成。
-      this.announcer.unlock();
-      const turningOn = !this.voice.listening;
-      this.voice.toggle();
-      // 行動裝置的辨識服務靜音幾秒就自行結束，每次重啟系統都會播提示音。
-      // 這無法從網頁端關掉，講清楚比讓使用者以為壞掉好。
-      if (turningOn && this.voice.listening && window.matchMedia('(pointer: coarse)').matches) {
-        this.toast('行動裝置每次重新收音會有系統提示音，屬正常現象');
-      }
-    });
+    const turningOn = !this.voice.listening;
+    this.voice.toggle();
+    // 行動裝置的辨識服務靜音幾秒就自行結束，每次重啟系統都會播提示音。
+    // 這無法從網頁端關掉，講清楚比讓使用者以為壞掉好。
+    if (turningOn && this.voice.listening && window.matchMedia('(pointer: coarse)').matches) {
+      this.toast('行動裝置每次重新收音會有系統提示音，屬正常現象');
+    }
+  }
 
+  private bindVoiceSettings(): void {
     $('selVoice').addEventListener('change', () => {
       const uri = ($('selVoice') as HTMLSelectElement).value;
       this.announcer.setVoice(uri);
@@ -518,7 +543,8 @@ export class App {
   /** 播報／辨識的狀態同時反映在頂列指示燈與設定面板的開關上。 */
   private renderVoiceState(): void {
     const tts = this.announcer.enabled;
-    const stt = this.voice.listening;
+    // 首頁還沒開始收音，顯示的是「進比賽後要不要開」的意向。
+    const stt = $('board').hidden ? this.prefs.stt : this.voice.listening;
 
     $('swTts').setAttribute('aria-checked', String(tts));
     $('swStt').setAttribute('aria-checked', String(stt));
@@ -526,6 +552,15 @@ export class App {
     $('statusTts').classList.toggle('on', tts);
     $('statusStt').classList.toggle('on', stt);
     $('statusStt').classList.toggle('listening', stt);
+
+    // 首頁右上的快速開關
+    for (const [id, on] of [
+      ['btnTtsQuick', tts],
+      ['btnSttQuick', stt],
+    ] as const) {
+      $(id).classList.toggle('on', on);
+      $(id).setAttribute('aria-checked', String(on));
+    }
   }
 
   /** 播報聲音的下拉選單：中文語音排前面，其餘歸到「其他語言」。 */

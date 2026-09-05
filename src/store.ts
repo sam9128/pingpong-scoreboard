@@ -87,6 +87,8 @@ export interface Prefs {
   rate: number;
   /** 自訂的語音計分指令。 */
   vocab: Vocabulary;
+  /** 資料版本。用來把新的預設值套到舊資料上，其餘設定照舊保留。 */
+  schema: number;
 }
 
 export const DEFAULT_PREFS: Prefs = {
@@ -95,10 +97,11 @@ export const DEFAULT_PREFS: Prefs = {
   firstServer: 0,
   startingEnd: 0,
   tts: true,
-  stt: false,
+  stt: true,
   voiceURI: null,
   rate: 1.05,
   vocab: DEFAULT_VOCAB,
+  schema: 2,
 };
 
 export function savePrefs(prefs: Prefs): void {
@@ -116,6 +119,7 @@ export function loadPrefs(): Prefs {
     if (!raw) return { ...DEFAULT_PREFS };
     const v = JSON.parse(raw) as Partial<Prefs> | null;
     if (typeof v !== 'object' || v === null) return { ...DEFAULT_PREFS };
+    const schema = typeof v.schema === 'number' ? v.schema : 1;
 
     const players = Array.isArray(v.players) && v.players.length === 2 &&
       v.players.every((p) => typeof p === 'string')
@@ -128,10 +132,13 @@ export function loadPrefs(): Prefs {
       firstServer: v.firstServer === 1 ? 1 : 0,
       startingEnd: v.startingEnd === 1 ? 1 : 0,
       tts: typeof v.tts === 'boolean' ? v.tts : DEFAULT_PREFS.tts,
-      stt: typeof v.stt === 'boolean' ? v.stt : DEFAULT_PREFS.stt,
+      // v1 的語音計分預設是關的；v2 起改為進入比賽自動開啟，因此舊資料
+      // 的 stt 一律丟掉、改用新預設，其餘設定原封不動保留。
+      stt: schema >= 2 && typeof v.stt === 'boolean' ? v.stt : DEFAULT_PREFS.stt,
       voiceURI: typeof v.voiceURI === 'string' && v.voiceURI ? v.voiceURI : null,
       rate: typeof v.rate === 'number' && v.rate >= 0.6 && v.rate <= 1.6 ? v.rate : DEFAULT_PREFS.rate,
       vocab: readVocab(v.vocab),
+      schema: DEFAULT_PREFS.schema,
     };
   } catch {
     return { ...DEFAULT_PREFS };

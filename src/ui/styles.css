@@ -180,17 +180,66 @@ body {
 /* ── 設定畫面 ───────────────────────────────────────────── */
 
 .setup {
-  overflow-y: auto;
-  padding: clamp(16px, 4vh, 44px) clamp(16px, 5vw, 64px);
-  /* 捲到底時最後一列不要停在右下角的版本號底下 */
-  padding-bottom: calc(clamp(16px, 4vh, 44px) + 42px);
+  /* 首頁一律一頁放完，不捲動 —— 因此所有尺寸都綁在同一個版面單位上，
+     取「高度與寬度都吃得下的那一個」，任一邊變窄就整組跟著縮。 */
+  --u: min(1.9vh, 0.9vw);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: calc(var(--u) * 2.4);
+  padding: calc(var(--u) * 2.4) max(16px, env(safe-area-inset-right))
+    calc(var(--u) * 2.4 + 34px) max(16px, env(safe-area-inset-left));
+}
+
+/* 標題與右側的快速開關同一列 —— 不捲動就不需要浮動，也就沒有互相蓋住的問題 */
+.setup-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(var(--u) * 2);
+}
+
+.setup-title {
+  min-width: 0;
+}
+
+.setup-hud {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 1.4);
+}
+
+/* 這一組在流程裡排版，不是浮動鍵 */
+.setup-hud .fab {
+  position: static;
+  width: calc(var(--u) * 7);
+  height: calc(var(--u) * 7);
+  min-width: 34px;
+  min-height: 34px;
+  font-size: calc(var(--u) * 3.2);
+}
+
+/* 播報／辨識的快速開關：亮起代表開著 */
+.fab-toggle {
+  opacity: 0.35;
+}
+
+.fab-toggle.on {
+  opacity: 1;
+  background: rgba(94, 106, 210, 0.18);
+  border-color: var(--border-accent);
+  box-shadow: var(--inner-highlight), 0 0 20px rgba(94, 106, 210, 0.18);
+  color: var(--fg);
 }
 
 .setup h1 {
   margin: 0;
-  font-size: clamp(48px, 8vw, 92px);
+  font-size: calc(var(--u) * 6.5);
   font-weight: 600;
   letter-spacing: -0.03em;
+  white-space: nowrap;
   background: linear-gradient(to bottom, #fff, rgba(255, 255, 255, 0.7));
   -webkit-background-clip: text;
   background-clip: text;
@@ -198,34 +247,39 @@ body {
 }
 
 .subtitle {
-  margin: 8px 0 clamp(18px, 3.5vh, 34px);
+  margin: calc(var(--u) * 0.6) 0 0;
   color: var(--fg-muted);
-  font-size: clamp(20px, 2.6vw, 26px);
-  line-height: 1.6;
+  font-size: calc(var(--u) * 2.2);
+  line-height: 1.4;
+  white-space: nowrap;
 }
 
 .setup-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: clamp(14px, 2vw, 24px);
+  /* 賽制那一欄要塞三顆四字按鈕，給它多一點寬度 */
+  grid-template-columns: 1fr 1fr 1.3fr;
+  gap: calc(var(--u) * 2) calc(var(--u) * 1.6);
 }
 
 .field {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  justify-content: flex-end;
+  gap: calc(var(--u) * 1);
   margin: 0;
   padding: 0;
   border: 0;
+  min-width: 0;
 }
 
 .field > span,
 .field > legend {
   color: var(--fg-muted);
-  font-size: 20px;
+  font-size: calc(var(--u) * 2);
   font-weight: 500;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.06em;
   padding: 0;
+  white-space: nowrap;
   text-transform: uppercase;
 }
 
@@ -236,8 +290,9 @@ body {
   box-shadow: var(--inner-highlight);
   color: var(--fg);
   font: inherit;
-  font-size: 31px;
-  padding: 14px 16px;
+  font-size: calc(var(--u) * 3);
+  padding: calc(var(--u) * 1.3) calc(var(--u) * 1.5);
+  min-width: 0;
   transition: border-color var(--t-quick) var(--ease), box-shadow var(--t-quick) var(--ease);
 }
 
@@ -253,7 +308,7 @@ body {
 
 .segmented {
   display: flex;
-  gap: 8px;
+  gap: calc(var(--u) * 0.7);
 }
 
 .segmented button {
@@ -264,8 +319,9 @@ body {
   box-shadow: var(--inner-highlight);
   color: var(--fg-muted);
   font: inherit;
-  font-size: 27px;
-  padding: 14px 8px;
+  font-size: calc(var(--u) * 2.4);
+  padding: calc(var(--u) * 1.3) calc(var(--u) * 0.5);
+  white-space: nowrap;
   cursor: pointer;
   transition: background var(--t-quick) var(--ease), border-color var(--t-quick) var(--ease),
     box-shadow var(--t-quick) var(--ease), transform var(--t-quick) var(--ease);
@@ -283,21 +339,23 @@ body {
   font-weight: 600;
 }
 
+/* 格線的第六格：與前面的欄位同一列，按鈕對齊隔壁控制項的下緣 */
 .setup-actions {
   display: flex;
-  gap: 12px;
-  margin-top: clamp(20px, 4vh, 40px);
-  flex-wrap: wrap;
+  flex-direction: row;
+  justify-content: flex-end;
+  gap: calc(var(--u) * 1.2);
 }
 
 button.primary,
 button.ghost {
   border-radius: var(--r-sm);
   font: inherit;
-  font-size: 30px;
+  font-size: calc(var(--u) * 2.7);
   font-weight: 600;
   letter-spacing: -0.01em;
-  padding: 17px 40px;
+  white-space: nowrap;
+  padding: calc(var(--u) * 1.4) calc(var(--u) * 2.2);
   cursor: pointer;
   border: 0;
   transition: background var(--t-quick) var(--ease), box-shadow var(--t-quick) var(--ease),
@@ -323,9 +381,12 @@ button.ghost:active {
 
 .hint {
   color: var(--fg-muted);
-  font-size: 21px;
-  margin-top: 16px;
+  font-size: calc(var(--u) * 2);
+  margin: 0;
   min-height: 1.2em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* 底部正中央的結束對局鍵 */
@@ -337,15 +398,6 @@ button.ghost:active {
 
 .fab-end:active {
   transform: translateX(-50%) scale(0.94);
-}
-
-/* 首頁的設定鍵：放右上，右下留給版本號。
-   首頁可以捲動，要 fixed 才不會跟著內容捲走 —— 選擇器必須是 .fab.fab-setup，
-   單用 .fab-setup 會被後面的 .fab { position: absolute } 蓋掉（同分數、後者勝）。 */
-.fab.fab-setup {
-  position: fixed;
-  top: max(12px, env(safe-area-inset-top));
-  bottom: auto;
 }
 
 /* 首頁右下角的版本號。純標示，不吃點擊。
@@ -1384,10 +1436,6 @@ button.ghost:active {
     bottom: max(8px, env(safe-area-inset-bottom));
   }
 
-  .fab.fab-setup {
-    top: max(8px, env(safe-area-inset-top));
-  }
-
   .setup-version {
     right: max(8px, env(safe-area-inset-right));
     bottom: max(8px, env(safe-area-inset-bottom));
@@ -1504,55 +1552,18 @@ button.ghost:active {
     filter: blur(80px);
   }
 
-  /* 設定畫面在矮螢幕改為緊湊排版。
-     右側多留一條走道給 fixed 的設定鍵 —— 矮螢幕的捲動距離夠長，輸入框
-     真的會停在它底下被擋住；底部多留一段給右下角的版本號。 */
+  /* 矮螢幕上高度才是稀缺的那一邊：把版面單位改由高度主導，
+     其餘尺寸都掛在 --u 上，會自己跟著縮。 */
   .setup {
-    padding: 12px calc(max(16px, env(safe-area-inset-right)) + 62px) 44px
-      max(16px, env(safe-area-inset-left));
-  }
-
-  .setup h1 {
-    font-size: 39px;
-  }
-
-  .subtitle {
-    margin: 4px 0 12px;
-    font-size: 16px;
+    --u: min(2vh, 1.05vw);
+    /* 矮螢幕先收直向的間距，字級盡量留住 */
+    gap: calc(var(--u) * 1.5);
+    padding-top: calc(var(--u) * 1.5);
+    padding-bottom: calc(var(--u) * 1.5 + 26px);
   }
 
   .setup-grid {
-    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-    gap: 10px;
-  }
-
-  .field {
-    gap: 5px;
-  }
-
-  .field input {
-    font-size: 24px;
-    padding: 9px 12px;
-  }
-
-  .segmented button {
-    font-size: 22px;
-    padding: 9px 6px;
-  }
-
-  .setup-actions {
-    margin-top: 14px;
-  }
-
-  button.primary,
-  button.ghost {
-    font-size: 24px;
-    padding: 12px 28px;
-  }
-
-  .hint {
-    margin-top: 8px;
-    font-size: 15px;
+    row-gap: calc(var(--u) * 1.4);
   }
 }
 
