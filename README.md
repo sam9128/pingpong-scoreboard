@@ -80,6 +80,18 @@
 - **手機強制橫向**：手機直向（寬度 540px 以下）會蓋上一層「請轉為橫向」提示。瀏覽器無法替使用者轉螢幕 —— Screen Orientation API 的 `lock()` 必須先進入全螢幕，iOS Safari 更是完全不支援 —— 因此採三層做法：manifest 宣告 `orientation: landscape`（Android 安裝後生效）、開賽時 best-effort 呼叫 `lock()`、以及這層一定會生效的覆蓋提示。設定面板另有「全螢幕並鎖定橫向」可手動觸發。
 - **開賽時自動全螢幕**：按下「開始比賽」時，觸控裝置（`pointer: coarse`）會順帶送出 `requestFullscreen()`。這不只是為了畫面乾淨 —— Android Chrome 只有在全螢幕或已安裝的 PWA 才會把內容畫進鏡頭挖孔區，一般分頁一律補黑邊；`orientation.lock()` 同樣要求全螢幕。桌機刻意不自動全螢幕，被瀏覽器擋下也只是靜默略過，設定面板裡仍有手動入口。
 
+### 語音播報與語音計分的互斥
+
+Android 上正在收音的 `SpeechRecognition` 會佔住音訊焦點，`speechSynthesis.speak()` 根本不會開始播。
+因此「即將發聲」必須在 `speak()` **之前**同步通知呼叫端停止收音 —— 早期版本把這個通知掛在 `utterance.onstart`，
+結果鎖死成「收音不停 → 不發聲 → `onstart` 不觸發 → 收音不停」，行動裝置上語音播報整個失效。
+`src/audio/__tests__/tts.spec.ts` 專門守這個順序，另外也守 `speak()` 擲例外、以及 `cancel()` 之後遲到的
+`onend` 不可以誤放行下一段播報的收音。
+
+`continuous = true` 在行動裝置上形同虛設：辨識服務靜音幾秒就自行結束，而每次 `start()` 系統都會播一次
+麥克風提示音。重啟間隔因此採漸進退讓（400ms → 6s），一聽到完整句子就歸零，有人講話時反應照樣即時。
+提示音本身是系統行為，網頁端無法關閉，只能靠關掉語音計分停止 —— 設定面板的說明與開啟時的提示都有寫明。
+
 ## 設計系統
 
 深色 Linear / Modern 風格。所有 token 集中在 `src/ui/styles.css` 的 `:root`，元件只消費變數，不寫死顏色。

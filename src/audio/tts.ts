@@ -18,7 +18,10 @@ export class Announcer {
   /** 使用者指定的語音；null 代表交給自動挑選。 */
   private preferredURI: string | null = null;
   private unlocked = false;
-  private pending = 0;
+  /** 尚未結束的播報。用集合而非計數，cancel() 之後遲到的 onend 才不會誤減。 */
+  private active = new Set<number>();
+  private seq = 0;
+  private speaking = false;
 
   readonly supported = typeof window !== 'undefined' && 'speechSynthesis' in window;
 
@@ -93,33 +96,53 @@ export class Announcer {
     if (this.voice) u.voice = this.voice;
     u.rate = this.rate;
 
-    u.onstart = () => this.bump(1);
-    const done = () => this.bump(-1);
+    // 「即將發聲」必須在 speak() 之前就宣告出去。
+    //
+    // Android 上正在收音的 SpeechRecognition 會佔住音訊焦點，speak() 根本不會
+    // 開始播；若等 onstart 才通知呼叫端停止收音，就會鎖死 —— 收音不停 → 不發聲
+    // → onstart 不觸發 → 收音不停，結果就是語音播報整個失效。
+    const id = ++this.seq;
+    this.active.add(id);
+    this.sync();
+
+    const done = (): void => {
+      window.clearTimeout(watchdog);
+      if (this.active.delete(id)) this.sync();
+    };
     u.onend = done;
     u.onerror = done;
+    // Chrome 偶爾 onend / onerror 都不送，留一道保險，否則收音永遠不會恢復。
+    const watchdog = window.setTimeout(done, estimateSpeechMs(text, this.rate));
 
     try {
       window.speechSynthesis.speak(u);
     } catch {
-      /* 忽略 */
+      done();
     }
   }
 
   cancel(): void {
     if (!this.supported) return;
     window.speechSynthesis.cancel();
-    if (this.pending !== 0) {
-      this.pending = 0;
-      this.onSpeakingChange?.(false);
-    }
+    this.active.clear();
+    this.sync();
   }
 
-  private bump(delta: number): void {
-    const was = this.pending > 0;
-    this.pending = Math.max(0, this.pending + delta);
-    const now = this.pending > 0;
-    if (was !== now) this.onSpeakingChange?.(now);
+  private sync(): void {
+    const now = this.active.size > 0;
+    if (now === this.speaking) return;
+    this.speaking = now;
+    this.onSpeakingChange?.(now);
   }
+}
+
+/**
+ * 播報時長的粗估，只用來當 watchdog 的上限 —— 寧可估長也不要提早放行收音，
+ * 否則麥克風會把還沒播完的播報聽成指令。
+ */
+function estimateSpeechMs(text: string, rate: number): number {
+  const perChar = 220 / Math.max(0.5, rate);
+  return Math.min(20000, 2500 + text.length * perChar);
 }
 
 /** 優先台灣中文，其次其他中文，最後放棄讓瀏覽器自行決定。 */

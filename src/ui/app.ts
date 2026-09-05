@@ -278,7 +278,13 @@ export class App {
     $('swStt').addEventListener('click', () => {
       // 借這一下使用者手勢解鎖 iOS 的語音合成。
       this.announcer.unlock();
+      const turningOn = !this.voice.listening;
       this.voice.toggle();
+      // 行動裝置的辨識服務靜音幾秒就自行結束，每次重啟系統都會播提示音。
+      // 這無法從網頁端關掉，講清楚比讓使用者以為壞掉好。
+      if (turningOn && this.voice.listening && window.matchMedia('(pointer: coarse)').matches) {
+        this.toast('行動裝置每次重新收音會有系統提示音，屬正常現象');
+      }
     });
 
     $('selVoice').addEventListener('change', () => {

@@ -167,6 +167,8 @@ export class VoiceScorer {
   private paused = false;
   private lastAcceptedAt = 0;
   private restartTimer: number | null = null;
+  /** 連續幾次「開了卻沒聽到任何話」就自行結束。用來拉長重啟間隔。 */
+  private idleStreak = 0;
 
   constructor(private opts: VoiceScorerOptions) {
     this.supported = this.ctor !== null;
@@ -187,6 +189,7 @@ export class VoiceScorer {
       return;
     }
     this.wanted = true;
+    this.idleStreak = 0;
     this.spinUp();
     this.opts.onStatus({ listening: true });
   }
@@ -229,13 +232,18 @@ export class VoiceScorer {
         this.opts.onStatus({ listening: false, message: '麥克風權限被拒絕' });
       } else if (err === 'network') {
         this.opts.onStatus({ listening: this.listening, message: '語音辨識需要網路連線' });
+      } else if (err === 'no-speech' || err === 'aborted') {
+        // 這一輪什麼都沒聽到，下一次重啟要等久一點。
+        this.idleStreak++;
       }
     };
 
     rec.onend = () => {
       this.rec = null;
-      // 連續辨識仍會週期性自行結束，只要使用者沒關就重新啟動。
-      if (this.wanted && !this.paused) this.scheduleRestart(300);
+      // continuous 在行動裝置上形同虛設：辨識服務靜音幾秒就會自行結束，
+      // 而每次 start() 系統都會播一次麥克風提示音。持續空轉時逐步拉長間隔，
+      // 一聽到話就歸零 —— 有人在講話時反應照樣即時。
+      if (this.wanted && !this.paused) this.scheduleRestart(this.restartDelay());
     };
 
     this.rec = rec;
@@ -256,6 +264,8 @@ export class VoiceScorer {
     for (let i = e.resultIndex; i < e.results.length; i++) {
       const result = e.results[i];
       if (!result?.isFinal) continue;
+      // 有聽到完整句子就代表附近有人在講話，回到最靈敏的重啟節奏。
+      this.idleStreak = 0;
       for (let j = 0; j < result.length; j++) {
         const transcript = result[j]?.transcript ?? '';
         const cmd = matchCommand(transcript, names, vocab);
@@ -266,6 +276,12 @@ export class VoiceScorer {
         }
       }
     }
+  }
+
+  /** 空轉越久間隔越長，上限 6 秒。 */
+  private restartDelay(): number {
+    const steps = [400, 900, 1800, 3500, 6000];
+    return steps[Math.min(this.idleStreak, steps.length - 1)] ?? 6000;
   }
 
   private scheduleRestart(delay: number): void {
