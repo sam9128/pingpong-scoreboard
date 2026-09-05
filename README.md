@@ -80,6 +80,23 @@
 - **手機強制橫向**：手機直向（寬度 540px 以下）會蓋上一層「請轉為橫向」提示。瀏覽器無法替使用者轉螢幕 —— Screen Orientation API 的 `lock()` 必須先進入全螢幕，iOS Safari 更是完全不支援 —— 因此採三層做法：manifest 宣告 `orientation: landscape`（Android 安裝後生效）、開賽時 best-effort 呼叫 `lock()`、以及這層一定會生效的覆蓋提示。設定面板另有「全螢幕並鎖定橫向」可手動觸發。
 - **開賽時自動全螢幕**：按下「開始比賽」時，觸控裝置（`pointer: coarse`）會順帶送出 `requestFullscreen()`。這不只是為了畫面乾淨 —— Android Chrome 只有在全螢幕或已安裝的 PWA 才會把內容畫進鏡頭挖孔區，一般分頁一律補黑邊；`orientation.lock()` 同樣要求全螢幕。桌機刻意不自動全螢幕，被瀏覽器擋下也只是靜默略過，設定面板裡仍有手動入口。
 
+### 版本更新
+
+`registerType` 用 `'prompt'` 而不是 `'autoUpdate'` —— 套用新版一定要重新載入頁面，
+而比賽打到一半被重新載入不能接受，所以偵測與套用分開：`src/pwa.ts` 只負責偵測與下載，
+何時套用由 `src/ui/app.ts` 決定。
+
+- **偵測時機**：進入 App 時（`registerSW({ immediate: true })`）、從背景切回前景
+  （`visibilitychange`）、網路重新連上（`online`）、以及每 30 分鐘一次 —— 記分板常常整天
+  掛在球檯旁不重新載入。連續詢問之間有 60 秒節流，設定裡的「檢查更新」會略過節流。
+- **套用時機**：在首頁就直接套用並重新載入；比賽中一律先擱著，跳出「這場結束後會自動更新」，
+  等回到首頁（結束對局或開新比賽）才套用，不會把人從比分畫面踢走。
+- 設定面板會顯示建置時間（`__BUILD_ID__`，由 `vite.config.ts` 注入）與上次檢查時間，
+  方便確認手上跑的是哪一版。
+
+> `vite preview` 的 `command` 是 `'serve'`，但它服務的是 build 產物，因此 `base` 要一併看
+> `isPreview`，否則預覽站的資源全部 404 —— 要驗證 Service Worker 只能用 preview，dev 沒有 SW。
+
 ### 語音播報與語音計分的互斥
 
 Android 上正在收音的 `SpeechRecognition` 會佔住音訊焦點，`speechSynthesis.speak()` 根本不會開始播。

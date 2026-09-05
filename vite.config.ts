@@ -5,16 +5,26 @@ import { VitePWA } from 'vite-plugin-pwa';
 // base 必須與 repo 名稱一致，否則所有資源都會 404。
 const REPO = 'pingpong-scoreboard';
 
-export default defineConfig(({ command }) => ({
+// 讓使用者在設定裡看得到自己跑的是哪一版，也方便回報問題。
+const BUILD_ID = `${new Date().toISOString().slice(0, 16).replace('T', ' ')} UTC`;
+
+export default defineConfig(({ command, isPreview }) => ({
   // 開發時掛在根目錄，正式建置時才加上 repo 路徑。
-  base: command === 'build' ? `/${REPO}/` : '/',
+  // vite preview 的 command 是 'serve'，但它服務的是 build 產物，
+  // base 必須跟著 build 走，否則預覽站的資源全部 404。
+  base: command === 'build' || isPreview ? `/${REPO}/` : '/',
+  define: {
+    __BUILD_ID__: JSON.stringify(BUILD_ID),
+  },
   build: {
     target: 'es2022',
   },
   plugins: [
     VitePWA({
-      registerType: 'autoUpdate',
-      injectRegister: 'auto',
+      // 套用新版一定要重新載入頁面，比賽中被重新載入不能接受，
+      // 因此不用 autoUpdate，改由 src/pwa.ts 決定套用時機。
+      registerType: 'prompt',
+      injectRegister: null,
       includeAssets: ['icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-512.png'],
       manifest: {
         name: '乒乓球記分板',

@@ -22,6 +22,7 @@ import { DEFAULT_VOCAB, VoiceScorer, formatPhrases, parsePhrases } from '../audi
 import type { Side, VoiceCommand, Vocabulary } from '../audio/stt';
 import * as store from '../store';
 import { createWakeLock } from '../wakelock';
+import { createUpdater } from '../pwa';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => {
   const el = document.getElementById(id);
@@ -83,6 +84,9 @@ export class App {
   private readonly announcer = new Announcer();
   private readonly voice: VoiceScorer;
   private readonly wake = createWakeLock();
+  private readonly updater = createUpdater();
+  /** 新版已下載但比賽正在進行，等回到首頁再套用。 */
+  private updateDeferred = false;
 
   constructor() {
     this.voice = new VoiceScorer({
@@ -108,6 +112,8 @@ export class App {
     this.announcer.setVoice(this.prefs.voiceURI);
     // 語音清單是非同步載入的，載完要重繪下拉選單。
     this.announcer.onVoicesChanged = () => this.renderVoiceOptions();
+
+    this.updater.onChange = () => this.onUpdateState();
 
     this.bindSetup();
     this.bindBoard();
@@ -330,6 +336,17 @@ export class App {
       this.toast('已還原預設指令');
     });
 
+    $('setUpdate').addEventListener('click', () => {
+      if (this.updater.ready) {
+        this.updater.apply();
+        return;
+      }
+      void this.updater.check(true).then((sent) => {
+        if (!sent) this.toast('目前無法連線檢查，稍後會自動再試');
+        else if (!this.updater.ready) this.toast('已是最新版本');
+      });
+    });
+
     $('setFullscreen').addEventListener('click', async () => {
       try {
         if (!document.fullscreenElement) {
@@ -377,6 +394,7 @@ export class App {
     this.renderVoiceState();
     this.renderVoiceOptions();
     this.renderVocabFields();
+    this.renderUpdateRow();
     ($('rngRate') as HTMLInputElement).value = String(this.announcer.rate);
     $('rateVal').textContent = `${this.announcer.rate.toFixed(2)}×`;
     $('settings').hidden = false;
@@ -410,6 +428,50 @@ export class App {
     // 墨跡中心相對於字框中心的偏移量（正值代表偏下）。
     const offset = (fontAsc - fontDesc - (inkAsc - inkDesc)) / 2;
     document.documentElement.style.setProperty('--score-nudge', `${offset / size}em`);
+  }
+
+  /**
+   * 有新版可用時的處理。
+   *
+   * 套用等於重新載入頁面 —— 在首頁就直接換掉，比賽中一律先擱著，
+   * 等這一場結束回到首頁再套用，不會把人從比分畫面踢走。
+   */
+  private onUpdateState(): void {
+    this.renderUpdateRow();
+    if (!this.updater.ready || this.updateDeferred) return;
+
+    if ($('board').hidden) {
+      this.updater.apply();
+      return;
+    }
+    this.updateDeferred = true;
+    this.toast('已下載新版本，這場結束後會自動更新');
+  }
+
+  private renderUpdateRow(): void {
+    const btn = $<HTMLButtonElement>('setUpdate');
+    const note = $('updateNote');
+    const version = `版本 ${__BUILD_ID__}`;
+
+    if (!this.updater.supported) {
+      btn.hidden = true;
+      note.textContent = `${version}（這個瀏覽器不支援離線更新）`;
+      return;
+    }
+    btn.hidden = false;
+    btn.disabled = this.updater.checking;
+
+    if (this.updater.ready) {
+      btn.textContent = '立即更新並重新載入';
+      note.textContent = `${version} · 已下載新版本`;
+    } else if (this.updater.checking) {
+      btn.textContent = '檢查中…';
+      note.textContent = version;
+    } else {
+      btn.textContent = '檢查更新';
+      const at = this.updater.lastCheckedAt;
+      note.textContent = at === 0 ? version : `${version} · 已是最新（${formatClock2(at)} 檢查）`;
+    }
   }
 
   /** 面板開著時每次比分變動都要同步，因為復原／重做現在也在裡面。 */
@@ -972,6 +1034,9 @@ export class App {
     $('setup').hidden = false;
     $('btnResume').hidden = true;
     $('setupHint').textContent = '';
+
+    // 比賽中擱下的更新，回到首頁就是最好的套用時機。
+    if (this.updater.ready) this.updater.apply();
   }
 }
 
@@ -1043,6 +1108,11 @@ function setSegValue(id: string, value: string): void {
 
 function segValue(id: string): string {
   return $(id).querySelector('button.on')?.getAttribute('data-value') ?? '0';
+}
+
+/** 時間戳記轉 HH:MM，用在「上次檢查更新」。 */
+function formatClock2(at: number): string {
+  return new Date(at).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' });
 }
 
 function formatClock(ms: number): string {
