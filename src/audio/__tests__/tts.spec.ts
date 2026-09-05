@@ -203,6 +203,31 @@ describe('Android 的靜默失敗', () => {
     expect(spoken).toHaveLength(1);
   });
 
+  it('Android 回報的 zh_TW 底線形式要正規化成 zh-TW', async () => {
+    // 底線形式不是合法的 BCP-47 標籤，直接指派給 utterance.lang 會靜默不播
+    voices = [{ name: '小美', lang: 'zh_TW', voiceURI: 'zh-tw-1' }];
+    const a = await freshAnnouncer();
+    a.say('三比二');
+    expect(spoken[0]?.lang).toBe('zh-TW');
+
+    // 退掉 voice 的重試也一樣要正規化
+    vi.advanceTimersByTime(1500);
+    expect(spoken[1]?.voice).toBeNull();
+    expect(spoken[1]?.lang).toBe('zh-TW');
+  });
+
+  it('語音清單還沒填好時先等一下再送', async () => {
+    voices = [];
+    const a = await freshAnnouncer();
+    a.say('三比二');
+    expect(spoken).toHaveLength(0);
+
+    voices = [{ name: '小美', lang: 'zh-TW', voiceURI: 'zh-tw-1' }];
+    vi.advanceTimersByTime(400);
+    expect(spoken).toHaveLength(1);
+    expect((spoken[0]?.voice as { name: string } | null)?.name).toBe('小美');
+  });
+
   it('diagnose 回報語音引擎的實際狀態', async () => {
     voices = [
       { name: '小美', lang: 'zh-TW', voiceURI: 'zh-tw-1' },

@@ -46,6 +46,8 @@ export class Announcer {
   /** 使用者指定的語音；null 代表交給自動挑選。 */
   private preferredURI: string | null = null;
   private unlocked = false;
+  /** 語音清單在 Android 上是非同步填的，第一次播報要等它。只等一次。 */
+  private voicesRetried = false;
   /** 尚未結束的播報。用集合而非計數，cancel() 之後遲到的 onend 才不會誤減。 */
   private active = new Set<number>();
   private seq = 0;
@@ -191,11 +193,19 @@ export class Announcer {
       /* 忽略 */
     }
 
+    // Android 的語音清單是非同步填的，開賽第一句常常趕在它之前。
+    // 這時候送出去等於沒有 voice 也沒有正確語言碼，等一下再送。
+    if (!bare && !this.voicesRetried && synth.getVoices().length === 0) {
+      this.voicesRetried = true;
+      window.setTimeout(() => this.dispatch(id, text, bare), 300);
+      return;
+    }
+
     const voice = bare ? null : this.freshVoice();
     const u = new SpeechSynthesisUtterance(text);
     if (voice) {
       u.voice = voice;
-      u.lang = voice.lang;
+      u.lang = normalizeLang(voice.lang);
     } else {
       u.lang = this.fallbackLang();
     }
@@ -251,7 +261,93 @@ export class Announcer {
   /** 沒有可用 voice 物件時的語言碼，盡量貼近裝置真的裝了的中文。 */
   private fallbackLang(): string {
     const zh = window.speechSynthesis.getVoices().find((v) => v.lang.toLowerCase().startsWith('zh'));
-    return zh?.lang ?? 'zh-TW';
+    return normalizeLang(zh?.lang ?? 'zh-TW');
+  }
+
+  /**
+   * 語音引擎自我測試：分三段送出，看哪一段引擎真的開了口。
+   *
+   * Android 的失敗是靜默的，光看畫面分不出「沒裝中文語音」「voice 物件無效」
+   * 「整個引擎不回應」。這支把三者分開，回傳一行可以直接回報的結果。
+   */
+  async selfTest(): Promise<string> {
+    if (!this.supported) return '這個瀏覽器不支援語音播報';
+
+    const id = ++this.seq;
+    this.active.add(id);
+    this.sync();
+    try {
+      const d = this.diagnose();
+      const parts = [`語音 ${d.total}（中文 ${d.chinese}）`];
+      if (d.resolvedLang) parts.push(`語言碼 ${d.resolvedLang}`);
+
+      const stages: [string, (u: SpeechSynthesisUtterance) => void][] = [
+        [
+          '指定語音',
+          (u) => {
+            const v = this.freshVoice();
+            if (v) {
+              u.voice = v;
+              u.lang = normalizeLang(v.lang);
+            }
+          },
+        ],
+        [
+          '只給語言',
+          (u) => {
+            u.lang = this.fallbackLang();
+          },
+        ],
+        ['引擎預設', () => undefined],
+      ];
+
+      for (const [label, apply] of stages) {
+        parts.push(`${label} ${(await this.probe(apply)) ? '有聲' : '無聲'}`);
+      }
+      return parts.join(' · ');
+    } finally {
+      if (this.active.delete(id)) this.sync();
+    }
+  }
+
+  /** 送一段短測試音，回報引擎有沒有真的開口（onstart 有沒有來）。 */
+  private probe(apply: (u: SpeechSynthesisUtterance) => void): Promise<boolean> {
+    return new Promise((resolve) => {
+      const synth = window.speechSynthesis;
+      const u = new SpeechSynthesisUtterance('測試');
+      apply(u);
+      u.rate = this.rate;
+
+      let settled = false;
+      const finish = (ok: boolean): void => {
+        if (settled) return;
+        settled = true;
+        window.clearTimeout(timer);
+        try {
+          synth.cancel();
+        } catch {
+          /* 忽略 */
+        }
+        resolve(ok);
+      };
+      u.onstart = () => finish(true);
+      u.onerror = () => finish(false);
+      const timer = window.setTimeout(() => finish(synth.speaking), 1600);
+
+      try {
+        synth.cancel();
+      } catch {
+        /* 忽略 */
+      }
+      // cancel() 之後要隔一拍，否則 Android 會把這一段吞掉。
+      window.setTimeout(() => {
+        try {
+          synth.speak(u);
+        } catch {
+          finish(false);
+        }
+      }, CANCEL_SETTLE_MS);
+    });
   }
 
   private reportSilence(): void {
@@ -278,6 +374,14 @@ export class Announcer {
     this.speaking = now;
     this.onSpeakingChange?.(now);
   }
+}
+
+/**
+ * Android 的語音引擎常常回報 zh_TW 這種底線形式，直接指派給 utterance.lang
+ * 不是合法的 BCP-47 標籤，引擎會靜默不播。
+ */
+function normalizeLang(lang: string): string {
+  return lang.replace(/_/g, '-');
 }
 
 /** 優先台灣中文，其次其他中文，最後放棄讓瀏覽器自行決定。 */

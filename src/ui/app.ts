@@ -349,6 +349,18 @@ export class App {
       this.toast('已還原預設指令');
     });
 
+    $('btnVoiceTest').addEventListener('click', () => {
+      const btn = $<HTMLButtonElement>('btnVoiceTest');
+      btn.disabled = true;
+      btn.textContent = '診斷中…';
+      $('voiceDiag').textContent = '正在依序測試三種送法，會聽到三聲「測試」…';
+      void this.announcer.selfTest().then((report) => {
+        btn.disabled = false;
+        btn.textContent = '語音引擎診斷';
+        $('voiceDiag').textContent = report;
+      });
+    });
+
     $('setUpdate').addEventListener('click', () => {
       if (this.updater.ready) {
         this.updater.apply();
@@ -570,7 +582,8 @@ export class App {
       return;
     }
     const lang = d.resolvedLang ? `（${d.resolvedLang}）` : '';
-    el.textContent = `可用語音 ${d.total} 個，其中中文 ${d.chinese} 個；目前使用 ${d.resolved ?? '系統預設'}${lang}。`;
+    const off = this.announcer.enabled ? '' : ' · 語音播報目前是關閉的';
+    el.textContent = `可用語音 ${d.total} 個，其中中文 ${d.chinese} 個；目前使用 ${d.resolved ?? '系統預設'}${lang}。${off}`;
   }
 
   private renderVocabFields(): void {
