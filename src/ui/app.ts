@@ -111,9 +111,19 @@ export class App {
     this.announcer.rate = this.prefs.rate;
     this.announcer.setVoice(this.prefs.voiceURI);
     // 語音清單是非同步載入的，載完要重繪下拉選單。
-    this.announcer.onVoicesChanged = () => this.renderVoiceOptions();
+    this.announcer.onVoicesChanged = () => {
+      this.renderVoiceOptions();
+      if (!$('settings').hidden) this.renderVoiceDiag();
+    };
 
     this.updater.onChange = () => this.onUpdateState();
+
+    // 送出了卻沒出聲：Android 上多半是沒裝中文語音。講出原因，
+    // 不要讓使用者對著沉默的板子猜。
+    this.announcer.onFailure = (reason) => {
+      this.toast(reason);
+      if (!$('settings').hidden) this.renderVoiceDiag();
+    };
 
     this.bindSetup();
     this.bindBoard();
@@ -299,6 +309,7 @@ export class App {
       this.prefs.voiceURI = this.announcer.voiceURI;
       store.savePrefs(this.prefs);
       this.renderVoiceOptions();
+      this.renderVoiceDiag();
       this.previewAnnouncement();
     });
 
@@ -393,6 +404,7 @@ export class App {
 
     this.renderVoiceState();
     this.renderVoiceOptions();
+    this.renderVoiceDiag();
     this.renderVocabFields();
     this.renderUpdateRow();
     ($('rngRate') as HTMLInputElement).value = String(this.announcer.rate);
@@ -534,6 +546,29 @@ export class App {
 
     sel.replaceChildren(...options);
     sel.value = this.announcer.voiceURI ?? '';
+  }
+
+  /** 「為什麼沒有聲音」的說明。Android 沒裝中文語音是最常見的原因。 */
+  private renderVoiceDiag(): void {
+    const el = $('voiceDiag');
+    const d = this.announcer.diagnose();
+
+    if (!d.supported) {
+      el.textContent = '這個瀏覽器不支援語音播報。';
+      return;
+    }
+    if (d.total === 0) {
+      el.textContent = '語音引擎沒有回應：這台裝置目前找不到任何可用的語音。';
+      return;
+    }
+    if (d.chinese === 0) {
+      el.textContent =
+        `裝置上有 ${d.total} 個語音，但沒有中文語音 —— 播報中文不會有聲音。` +
+        '請到系統「設定 → 語言與輸入 → 文字轉語音輸出」安裝 Google 文字轉語音，並下載中文語音資料。';
+      return;
+    }
+    const lang = d.resolvedLang ? `（${d.resolvedLang}）` : '';
+    el.textContent = `可用語音 ${d.total} 個，其中中文 ${d.chinese} 個；目前使用 ${d.resolved ?? '系統預設'}${lang}。`;
   }
 
   private renderVocabFields(): void {
