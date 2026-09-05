@@ -168,6 +168,15 @@ const COOLDOWN_MS = 900;
 const RESTART_MS = 250;
 /** 播報結束後再忽略一小段，把還在空氣裡的尾音吃掉。 */
 const MUTE_TAIL_MS = 350;
+/**
+ * 空轉時的重啟間隔。
+ *
+ * 辨識服務靜音幾秒就自行結束，而每次 start() 系統都會播一次提示音 ——
+ * 這是唯一還消不掉的一聲。沒人講話時逐步拉長間隔讓它安靜下來，一聽到
+ * 有人說話就回到最短的那一段。實際打球時每一分前後都有人出聲，因此
+ * 間隔會維持在短的那一端，效果接近一分一次。
+ */
+const RESTART_STEPS = [400, 900, 1800, 3500, 6000] as const;
 
 export class VoiceScorer {
   readonly supported: boolean;
@@ -186,6 +195,10 @@ export class VoiceScorer {
   private unmuteTimer: number | null = null;
   private lastAcceptedAt = 0;
   private restartTimer: number | null = null;
+  /** 連續幾個 session 從頭到尾沒聽到任何話。用來決定重啟間隔。 */
+  private idleStreak = 0;
+  /** 這一個 session 有沒有聽到過完整句子。 */
+  private heardThisSession = false;
 
   constructor(private opts: VoiceScorerOptions) {
     this.supported = this.ctor !== null;
@@ -216,6 +229,7 @@ export class VoiceScorer {
       return;
     }
     this.wanted = true;
+    this.idleStreak = 0;
     this.spinUp();
     this.notify();
   }
@@ -243,6 +257,8 @@ export class VoiceScorer {
     this.unmuteTimer = window.setTimeout(() => {
       this.unmuteTimer = null;
       this.muted = false;
+      // 剛播報完代表剛得了一分，場邊正熱鬧，回到最靈敏的節奏。
+      this.idleStreak = 0;
       // 這段期間辨識服務若自行結束過，這裡把它接回來。
       if (this.wanted && !this.rec) this.scheduleRestart(RESTART_MS);
       this.notify();
@@ -259,6 +275,7 @@ export class VoiceScorer {
   private spinUp(): void {
     // 刻意不看 muted：播報期間也讓收音一路開著，才不會一分響一次提示音。
     if (!this.ctor || this.rec || !this.wanted) return;
+    this.heardThisSession = false;
     const rec = new this.ctor();
     rec.lang = 'zh-TW';
     rec.continuous = true;
@@ -281,9 +298,12 @@ export class VoiceScorer {
     rec.onend = () => {
       this.rec = null;
       // continuous 在行動裝置上形同虛設：辨識服務靜音幾秒就會自行結束。
-      // 只要使用者沒關就立刻接回去，讓收音在時間上盡量連續 —— 唯一該中斷
-      // 收音的理由是播報，其餘一律無縫接上。
-      if (this.wanted) this.scheduleRestart(RESTART_MS);
+      // 整段都沒聽到話就把下次的間隔拉長，否則維持最短。
+      // 先用目前的空轉次數決定這一次要等多久，再把次數往上加 ——
+      // 第一次空轉仍然是最短的 400ms，之後才逐步拉長。
+      const delay = this.restartDelay();
+      if (!this.heardThisSession) this.idleStreak++;
+      if (this.wanted) this.scheduleRestart(delay);
     };
 
     this.rec = rec;
@@ -306,6 +326,9 @@ export class VoiceScorer {
     for (let i = e.resultIndex; i < e.results.length; i++) {
       const result = e.results[i];
       if (!result?.isFinal) continue;
+      // 附近有人在講話：這一個 session 不算空轉，重啟節奏回到最短。
+      this.heardThisSession = true;
+      this.idleStreak = 0;
       for (let j = 0; j < result.length; j++) {
         const transcript = result[j]?.transcript ?? '';
         const cmd = matchCommand(transcript, names, vocab);
@@ -316,6 +339,11 @@ export class VoiceScorer {
         }
       }
     }
+  }
+
+  /** 空轉越久間隔越長，上限 6 秒；一聽到話就回到最短。 */
+  private restartDelay(): number {
+    return RESTART_STEPS[Math.min(this.idleStreak, RESTART_STEPS.length - 1)] ?? RESTART_MS;
   }
 
   private scheduleRestart(delay: number): void {

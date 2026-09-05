@@ -165,6 +165,71 @@ describe('VoiceScorer 的意向與收音狀態', () => {
     expect(FakeRec.instances.some((r) => r.started)).toBe(true);
   });
 
+  it('連續空轉時，重啟間隔逐步拉長', () => {
+    const v = makeScorer();
+    v.start();
+    expect(FakeRec.instances).toHaveLength(1);
+
+    // 第一次空轉：最短的 400ms
+    FakeRec.instances.at(-1)?.onend?.();
+    vi.advanceTimersByTime(399);
+    expect(FakeRec.instances).toHaveLength(1);
+    vi.advanceTimersByTime(1);
+    expect(FakeRec.instances).toHaveLength(2);
+
+    // 第二次空轉：900ms
+    FakeRec.instances.at(-1)?.onend?.();
+    vi.advanceTimersByTime(899);
+    expect(FakeRec.instances).toHaveLength(2);
+    vi.advanceTimersByTime(1);
+    expect(FakeRec.instances).toHaveLength(3);
+
+    // 第三次空轉：1800ms
+    FakeRec.instances.at(-1)?.onend?.();
+    vi.advanceTimersByTime(1799);
+    expect(FakeRec.instances).toHaveLength(3);
+    vi.advanceTimersByTime(1);
+    expect(FakeRec.instances).toHaveLength(4);
+  });
+
+  it('聽到有人講話就回到最短間隔', () => {
+    const v = makeScorer();
+    v.start();
+    // 先空轉兩次把間隔拉長
+    for (let i = 0; i < 2; i++) {
+      FakeRec.instances.at(-1)?.onend?.();
+      vi.advanceTimersByTime(1000);
+    }
+    const rec = FakeRec.instances.at(-1) as unknown as { onresult: (e: unknown) => void };
+    rec.onresult({
+      resultIndex: 0,
+      results: { length: 1, 0: { isFinal: true, length: 1, 0: { transcript: '今天風有點大' } } },
+    });
+
+    const n = FakeRec.instances.length;
+    FakeRec.instances.at(-1)?.onend?.();
+    vi.advanceTimersByTime(400);
+    expect(FakeRec.instances).toHaveLength(n + 1);
+  });
+
+  it('播報結束也算活動，間隔跟著歸零', () => {
+    const v = makeScorer();
+    v.start();
+    for (let i = 0; i < 3; i++) {
+      FakeRec.instances.at(-1)?.onend?.();
+      vi.advanceTimersByTime(4000);
+    }
+    // 得分播報
+    v.pause();
+    v.resume();
+    vi.advanceTimersByTime(400);
+
+    const n = FakeRec.instances.length;
+    FakeRec.instances.at(-1)?.onend?.();
+    vi.advanceTimersByTime(400);
+    expect(FakeRec.instances).toHaveLength(n + 1);
+  });
+
   it('stop() 關掉意向，但不算是使用者拒絕，不動偏好', () => {
     const v = makeScorer();
     v.start();
