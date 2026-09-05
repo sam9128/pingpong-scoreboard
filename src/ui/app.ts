@@ -125,6 +125,8 @@ export class App {
       if (!$('settings').hidden) this.renderVoiceDiag();
     };
 
+    $('setupVersion').textContent = __BUILD_ID__;
+
     this.bindSetup();
     this.bindBoard();
     this.bindSettings();
