@@ -100,10 +100,6 @@ export class App {
         this.renderVoiceState();
         if (message) this.toast(message);
       },
-      onDenied: () => {
-        this.prefs.stt = false;
-        store.savePrefs(this.prefs);
-      },
     });
 
     // 播報期間關閉收音，否則播報聲會被自己聽成指令。
@@ -1127,6 +1123,11 @@ export class App {
     $('setup').hidden = false;
     $('btnResume').hidden = true;
     $('setupHint').textContent = '';
+
+    // 一定要在切回首頁之後重繪。voice.stop() 的通知發生在切換之前，
+    // 那時 renderVoiceState 還以為在比賽中、顯示的是「此刻有沒有在收音」，
+    // 於是首頁的 🎤 會停在熄滅狀態 —— 而按下去等於把偏好真的關掉。
+    this.renderVoiceState();
 
     // 比賽中擱下的更新，回到首頁就是最好的套用時機。
     if (this.updater.ready) this.updater.apply();

@@ -158,8 +158,6 @@ export interface VoiceScorerOptions {
    * 否則每報一次分就熄一次。
    */
   onStatus: (status: { active: boolean; listening: boolean; message?: string }) => void;
-  /** 麥克風權限被拒絕。只有這種「使用者做的決定」才該寫回偏好。 */
-  onDenied?: () => void;
 }
 
 /** 連續辨識期間，兩個指令之間的最短間隔，避免同一句話被重複判成兩分。 */
@@ -287,8 +285,9 @@ export class VoiceScorer {
     rec.onerror = (e) => {
       const err = e.error ?? '';
       if (err === 'not-allowed' || err === 'service-not-allowed') {
+        // 這一場拿不到權限就不收音，但意向不寫回偏好 —— 「把提示框滑掉」
+        // 與「按封鎖」都是 not-allowed，前者不該讓設定永久消失。
         this.wanted = false;
-        this.opts.onDenied?.();
         this.notify('麥克風權限被拒絕');
       } else if (err === 'network') {
         this.notify('語音辨識需要網路連線');

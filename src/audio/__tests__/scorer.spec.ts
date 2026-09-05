@@ -7,9 +7,9 @@ import { DEFAULT_VOCAB, VoiceScorer } from '../stt';
  * - active   使用者的意向 —— 語音計分開著沒。播報期間不會變。
  * - listening 此刻是不是真的在收音。播報期間為 false。
  *
- * 指示燈要看 active，看 listening 的話每報一次分就熄一次；
- * 而偏好只能在「使用者自己按開關」與「權限被拒絕」時寫回 ——
- * 結束對局呼叫的 stop() 是收拾場面，不是使用者關掉它。
+ * 指示燈要看 active，看 listening 的話每報一次分就熄一次。
+ * 偏好只在使用者自己按開關時寫回：結束對局呼叫的 stop() 是收拾場面，
+ * 權限被拒絕是當下的執行環境，兩者都不代表使用者想關掉這個功能。
  */
 
 class FakeRec {
@@ -43,7 +43,6 @@ interface Status {
 }
 
 let statuses: Status[] = [];
-let denied = 0;
 
 function makeScorer() {
   return new VoiceScorer({
@@ -51,14 +50,12 @@ function makeScorer() {
     getVocab: () => DEFAULT_VOCAB,
     onCommand: () => undefined,
     onStatus: (s) => statuses.push(s),
-    onDenied: () => denied++,
   });
 }
 
 beforeEach(() => {
   vi.useFakeTimers();
   statuses = [];
-  denied = 0;
   FakeRec.instances = [];
   const g = globalThis as unknown as Record<string, unknown>;
   g.window = globalThis;
@@ -117,7 +114,6 @@ describe('VoiceScorer 的意向與收音狀態', () => {
       getVocab: () => DEFAULT_VOCAB,
       onCommand: (_cmd, t) => heard.push(t),
       onStatus: (s) => statuses.push(s),
-      onDenied: () => denied++,
     });
     v.start();
     const rec = FakeRec.instances.at(-1) as unknown as {
@@ -230,28 +226,27 @@ describe('VoiceScorer 的意向與收音狀態', () => {
     expect(FakeRec.instances).toHaveLength(n + 1);
   });
 
-  it('stop() 關掉意向，但不算是使用者拒絕，不動偏好', () => {
+  it('stop() 關掉意向，而且不帶任何訊息 —— 那是收拾場面，不是失敗', () => {
     const v = makeScorer();
     v.start();
     v.stop();
     expect(v.active).toBe(false);
-    expect(denied).toBe(0);
+    expect(statuses.at(-1)).toMatchObject({ active: false, listening: false });
+    expect(statuses.at(-1)?.message).toBeUndefined();
   });
 
-  it('麥克風權限被拒絕才會回報 onDenied', () => {
+  it('權限被拒絕時停止這一場，並說明原因', () => {
     const v = makeScorer();
     v.start();
     FakeRec.instances.at(-1)?.onerror?.({ error: 'not-allowed' });
-    expect(denied).toBe(1);
     expect(v.active).toBe(false);
     expect(statuses.at(-1)?.message).toBe('麥克風權限被拒絕');
   });
 
-  it('網路錯誤不算使用者拒絕，意向保持不變', () => {
+  it('網路錯誤不影響意向，只是說明原因', () => {
     const v = makeScorer();
     v.start();
     FakeRec.instances.at(-1)?.onerror?.({ error: 'network' });
-    expect(denied).toBe(0);
     expect(v.active).toBe(true);
     expect(statuses.at(-1)?.message).toBe('語音辨識需要網路連線');
   });
