@@ -251,6 +251,7 @@ export class App {
   private bindBoard(): void {
     this.bindCourt($('courtL'), 'left');
     this.bindCourt($('courtR'), 'right');
+    this.bindGamesPanel();
 
     $('btnToL').addEventListener('click', (e) => {
       e.stopPropagation();
@@ -642,6 +643,46 @@ export class App {
    * 第一下會立刻加分以保留即時回饋，因此雙擊時要收回那一分再多扣一分，
    * 淨效果才是使用者預期的「減 1 分」。
    */
+  /**
+   * 中央局數面板雙擊 = 復原上一步。
+   *
+   * 放在這裡而不是兩側球場：球場的雙擊已經是「該側扣一分」，語意不同；
+   * 而面板不屬於任何一方，拿來做全域的復原剛好。單擊維持沒有作用，
+   * 避免記分時手指掃過就誤觸。
+   */
+  private bindGamesPanel(): void {
+    const el = $('gamesCenter');
+    let lastTapAt = 0;
+
+    el.addEventListener('pointerup', () => {
+      const now = Date.now();
+      if (now - lastTapAt <= DOUBLE_TAP_MS) {
+        lastTapAt = 0;
+        this.undoByGesture();
+        return;
+      }
+      lastTapAt = now;
+    });
+
+    el.addEventListener('contextmenu', (e) => e.preventDefault());
+  }
+
+  /**
+   * 手勢版的復原。設定面板裡的復原鍵按下去看得到畫面變化，這個手勢是隱形的，
+   * 因此一定要給回饋 —— 順便留一個一鍵重做的出口。
+   */
+  private undoByGesture(): void {
+    if (this.events.length === 0) {
+      this.toast('沒有可以復原的動作');
+      return;
+    }
+    this.undo();
+    this.toast('已復原上一步', {
+      label: '重做',
+      onClick: () => this.redo(),
+    });
+  }
+
   private bindCourt(el: HTMLElement, side: Side): void {
     let lastTapAt = 0;
     // 雙擊第一下之前的事件串：取消扣分時要還原到「整個雙擊手勢之前」。
@@ -886,11 +927,9 @@ export class App {
     $('modeChip').hidden = !(s.expedite || s.isDeuce);
 
     // 局數集中在中央面板，顏色跟著左右兩側目前是哪位選手走。
-    const gc = document.querySelector<HTMLElement>('.games-center');
-    if (gc) {
-      gc.style.setProperty('--gc-left', left === 0 ? 'var(--p1)' : 'var(--p2)');
-      gc.style.setProperty('--gc-right', right === 0 ? 'var(--p1)' : 'var(--p2)');
-    }
+    const gc = $('gamesCenter');
+    gc.style.setProperty('--gc-left', left === 0 ? 'var(--p1)' : 'var(--p2)');
+    gc.style.setProperty('--gc-right', right === 0 ? 'var(--p1)' : 'var(--p2)');
     $('gamesNumL').textContent = String(s.gamesWon[left]);
     $('gamesNumR').textContent = String(s.gamesWon[right]);
     renderPips($('pipsL'), s.gamesWon[left], s.gamesNeeded);

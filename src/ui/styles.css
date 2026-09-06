@@ -670,6 +670,8 @@ button.ghost:active {
 .games-center {
   align-self: start;
   z-index: 2;
+  /* 雙擊復原上一步，與兩側球場一樣是可點區域 */
+  cursor: pointer;
   display: flex;
   flex-direction: column;
   align-items: center;
