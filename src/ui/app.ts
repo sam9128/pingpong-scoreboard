@@ -149,7 +149,9 @@ export class App {
     $('setupVersion').textContent = __BUILD_ID__;
     $('btnTtsQuick').addEventListener('click', () => this.toggleTts());
     $('btnSttQuick').addEventListener('click', () => this.toggleStt());
+    $('btnMediaKeysQuick').addEventListener('click', () => void this.toggleMediaKeys());
     if (!this.voice.supported) $<HTMLButtonElement>('btnSttQuick').disabled = true;
+    if (!this.mediaKeys.supported) $<HTMLButtonElement>('btnMediaKeysQuick').disabled = true;
 
     this.bindSetup();
     this.bindBoard();
@@ -588,6 +590,7 @@ export class App {
     for (const [id, on] of [
       ['btnTtsQuick', tts],
       ['btnSttQuick', stt],
+      ['btnMediaKeysQuick', this.prefs.mediaKeys],
     ] as const) {
       $(id).classList.toggle('on', on);
       $(id).setAttribute('aria-checked', String(on));
