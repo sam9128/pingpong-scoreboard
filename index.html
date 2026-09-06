@@ -120,6 +120,14 @@
         <span class="hud-timer" id="timerLabel">00:00</span>
         <span class="hud-status" id="statusTts" title="語音播報" role="img" aria-label="語音播報">🔊</span>
         <span class="hud-status" id="statusStt" title="語音計分" role="img" aria-label="語音計分">🎤</span>
+        <span
+          class="hud-status"
+          id="statusMediaKeys"
+          title="耳機按鍵計分"
+          role="img"
+          aria-label="耳機按鍵計分"
+          >🎧</span
+        >
         <button class="fab" id="btnSettings" aria-haspopup="dialog" aria-label="設定">⚙</button>
       </div>
 
@@ -202,6 +210,19 @@
               >
             </span>
             <button class="switch" id="swStt" role="switch" aria-checked="false">
+              <span class="switch-knob"></span>
+            </button>
+          </div>
+
+          <div class="switch-row">
+            <span class="switch-text">
+              <b>耳機按鍵計分</b>
+              <small id="mediaKeysHint"
+                >藍牙耳機的<b>上一曲 = 左方得分</b>、<b>下一曲 = 右方得分</b>。需要整場播放一段聽不見的音訊才收得到按鍵，
+                因此連上耳機後語音播報也會從耳機出聲，平板喇叭不會響。</small
+              >
+            </span>
+            <button class="switch" id="swMediaKeys" role="switch" aria-checked="false">
               <span class="switch-knob"></span>
             </button>
           </div>

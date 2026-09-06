@@ -81,6 +81,8 @@ export interface Prefs {
   tts: boolean;
   /** 語音計分開關 */
   stt: boolean;
+  /** 耳機媒體鍵計分開關（上一曲 = 左方得分、下一曲 = 右方得分） */
+  mediaKeys: boolean;
   /** 指定的播報語音；null 代表自動挑選中文語音。 */
   voiceURI: string | null;
   /** 播報語速。 */
@@ -98,6 +100,7 @@ export const DEFAULT_PREFS: Prefs = {
   startingEnd: 0,
   tts: true,
   stt: true,
+  mediaKeys: false,
   voiceURI: null,
   rate: 1.05,
   vocab: DEFAULT_VOCAB,
@@ -135,6 +138,7 @@ export function loadPrefs(): Prefs {
       // v1 的語音計分預設是關的；v2 起改為進入比賽自動開啟，因此舊資料
       // 的 stt 一律丟掉、改用新預設，其餘設定原封不動保留。
       stt: schema >= 2 && typeof v.stt === 'boolean' ? v.stt : DEFAULT_PREFS.stt,
+      mediaKeys: typeof v.mediaKeys === 'boolean' ? v.mediaKeys : DEFAULT_PREFS.mediaKeys,
       voiceURI: typeof v.voiceURI === 'string' && v.voiceURI ? v.voiceURI : null,
       rate: typeof v.rate === 'number' && v.rate >= 0.6 && v.rate <= 1.6 ? v.rate : DEFAULT_PREFS.rate,
       vocab: readVocab(v.vocab),

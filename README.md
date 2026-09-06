@@ -33,6 +33,7 @@
 | 該方減 1 分 | **雙擊**該方半邊畫面（僅限本局）；扣分後 5 秒內可一鍵「取消扣分」 |
 | 復原上一步 | **雙擊中央局數面板**；復原後 5 秒內可一鍵「重做」 |
 | 復原／重做 | 設定面板內，或鍵盤 `Z` / `Y` |
+| 耳機計分 | 藍牙耳機**上一曲 = 左方得分**、**下一曲 = 右方得分**（設定面板開啟） |
 | 得分（鍵盤） | `←` 左方得分、`→` 右方得分 |
 | 輪換發球法回擊計數 | 點擊計數器，或鍵盤空白鍵 |
 | 進階設定 | 右上角的 ⚙ |
@@ -155,6 +156,42 @@
 
 > `vite preview` 的 `command` 是 `'serve'`，但它服務的是 build 產物，因此 `base` 要一併看
 > `isPreview`，否則預覽站的資源全部 404 —— 要驗證 Service Worker 只能用 preview，dev 沒有 SW。
+
+### 耳機媒體鍵計分
+
+耳機的上／下一曲不是鍵盤事件，收不到 `keydown` —— 它走 AVRCP 到系統，再交給**目前持有音訊焦點**的 App。
+網頁這端的入口是 Media Session，而規格把耳機明確列為預期的輸入來源：
+
+> Media session actions expose a new input layer to the web platform… especially, when the actions are
+> coming from **remote devices such as a headset**. — [W3C Media Session §2.2](https://w3c.github.io/mediasession/)
+
+支援度（MDN BCD）：`setActionHandler` Chrome 73 / **Chrome Android 57** / Safari 15 / **iOS Safari 15** / Firefox 82。
+對照之下 WebHID 手機端完全沒有，Web Bluetooth 則把 HID service（`0x1812`）列入
+[GATT 封鎖清單](https://github.com/WebBluetoothCG/registries/blob/master/gatt_blocklist.txt)，理由是避免網頁變成鍵盤側錄器。
+**三條路裡只有這條在手機上通。**
+
+代價是必須整場播著音訊才拿得到音訊焦點：
+
+> a browsing context has audio focus **if it is currently playing audio** — W3C Media Session
+>
+> Chrome for Android requests "full" audio focus… only when the **media file duration is at least 5 seconds** — Chrome 文件
+
+因此 `src/audio/mediakeys.ts` 在執行時產生一段 **8 秒**、振幅只有 1 LSB（約 -90 dBFS）的 WAV 循環播放。
+振幅刻意不是數位全靜音 —— 全靜音有機會被判定成沒有在發聲而拿不到焦點；音量也必須非零。
+
+幾個關鍵設計：
+
+- **接管必須在使用者手勢裡**：`enable()` 在「開始比賽」那一下呼叫，錯過就會被自動播放政策擋下。
+  首頁的開關只寫偏好，不接管。
+- **循環被暫停就等於失去 media session**，而且畫面上完全看不出來 —— 按鍵會靜靜地失效。
+  因此 `onpause` 會自動接回去，播報結束後也會 `keepAlive()` 再確認一次。
+- **播放／暫停鍵不拿來計分**：按下去若真的把循環停掉就會連帶失去工作階段，所以一律接回播放。
+- 回到首頁 `disable()` 交還控制權，不長期霸佔使用者的耳機按鍵。
+
+> **已知取捨，無法從網頁端解決**：藍牙耳機本身是音訊輸出裝置。連上之後語音播報會被路由到耳機，
+> 平板喇叭不會出聲 —— 場邊聽不到報分。Web 沒有 per-app 音訊輸出路由的 API。
+> 若需要場邊聽得到報分，應改用**送方向鍵的藍牙翻譜器／簡報筆**：那是純 HID、不是音訊裝置，
+> 不影響音訊路由，而且 `←` `→` 已經綁好，零改動。
 
 ### 語音播報與語音計分的互斥
 

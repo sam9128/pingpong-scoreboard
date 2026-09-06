@@ -23,6 +23,7 @@ import type { Side, VoiceCommand, Vocabulary } from '../audio/stt';
 import * as store from '../store';
 import { createWakeLock } from '../wakelock';
 import { createUpdater } from '../pwa';
+import { MediaKeyScorer } from '../audio/mediakeys';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => {
   const el = document.getElementById(id);
@@ -85,6 +86,7 @@ export class App {
   private readonly voice: VoiceScorer;
   private readonly wake = createWakeLock();
   private readonly updater = createUpdater();
+  private readonly mediaKeys: MediaKeyScorer;
   /** 新版已下載但比賽正在進行，等回到首頁再套用。 */
   private updateDeferred = false;
 
@@ -102,10 +104,24 @@ export class App {
       },
     });
 
+    this.mediaKeys = new MediaKeyScorer({
+      onAction: (a) => this.addPoint(a),
+      onStatus: ({ message }) => {
+        this.renderVoiceState();
+        if (message) this.toast(message);
+      },
+    });
+
     // 播報期間關閉收音，否則播報聲會被自己聽成指令。
     this.announcer.onSpeakingChange = (speaking) => {
-      if (speaking) this.voice.pause();
-      else this.voice.resume();
+      if (speaking) {
+        this.voice.pause();
+      } else {
+        this.voice.resume();
+        // 播報會短暫搶走音訊焦點，回來確認循環還在播 —— 循環一停就等於
+        // 失去 media session，耳機按鍵會靜靜地失效。
+        this.mediaKeys.keepAlive();
+      }
     };
 
     this.announcer.enabled = this.prefs.tts;
@@ -244,6 +260,10 @@ export class App {
       // 沿用上次的選擇；瀏覽器仍會另外詢問麥克風權限。
       this.voice.start();
     }
+
+    // 仍在「開始比賽 / 繼續上一場」的使用者手勢中 —— 取得媒體控制權必須
+    // 在手勢裡，錯過這一下播放就會被自動播放政策擋下。
+    if (this.prefs.mediaKeys) void this.mediaKeys.enable();
   }
 
   // ── 記分畫面 ────────────────────────────────────────────
@@ -295,6 +315,7 @@ export class App {
   private bindSettings(): void {
     $('swTts').addEventListener('click', () => this.toggleTts());
     $('swStt').addEventListener('click', () => this.toggleStt());
+    $('swMediaKeys').addEventListener('click', () => void this.toggleMediaKeys());
     this.bindVoiceSettings();
   }
 
@@ -558,6 +579,11 @@ export class App {
     // 脈動代表「此刻真的在收音」；播報期間會暫停，但燈仍然亮著。
     $('statusStt').classList.toggle('listening', this.voice.listening);
 
+    // 首頁顯示意向，比賽中顯示是否真的握有媒體控制權。
+    const mk = $('board').hidden ? this.prefs.mediaKeys : this.mediaKeys.active;
+    $('statusMediaKeys').classList.toggle('on', mk);
+    $('swMediaKeys').setAttribute('aria-checked', String(this.prefs.mediaKeys));
+
     // 首頁右上的快速開關
     for (const [id, on] of [
       ['btnTtsQuick', tts],
@@ -681,6 +707,31 @@ export class App {
       label: '重做',
       onClick: () => this.redo(),
     });
+  }
+
+  /**
+   * 耳機按鍵計分開關。
+   *
+   * 與語音計分同樣的分工：首頁只切換偏好，真正取得媒體控制權要等進入比賽 ——
+   * enable() 必須在使用者手勢裡呼叫，否則播放會被自動播放政策擋下，
+   * 而「開始比賽」那一下正好是手勢。
+   */
+  private async toggleMediaKeys(): Promise<void> {
+    if (!this.mediaKeys.supported) {
+      this.toast('這個瀏覽器不支援媒體鍵');
+      return;
+    }
+
+    const turningOn = !this.prefs.mediaKeys;
+    this.prefs.mediaKeys = turningOn;
+    store.savePrefs(this.prefs);
+
+    if (!$('board').hidden) {
+      // 比賽中：這一下點擊本身就是手勢，可以直接接管。
+      if (turningOn) await this.mediaKeys.enable();
+      else this.mediaKeys.disable();
+    }
+    this.renderVoiceState();
   }
 
   private bindCourt(el: HTMLElement, side: Side): void {
@@ -1152,6 +1203,8 @@ export class App {
   private newMatch(): void {
     this.announcer.cancel();
     this.voice.stop();
+    // 回到首頁就交還媒體控制權，不要一直霸佔使用者的耳機按鍵。
+    this.mediaKeys.disable();
     // store.clear() 只清賽事記錄，prefs 另存一把 key，設定不會被洗掉。
     this.wake.release();
     store.clear();
