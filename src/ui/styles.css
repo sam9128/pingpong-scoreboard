@@ -536,9 +536,13 @@ button.ghost:active {
   /* 色暈的兩種狀態。沒有球權時只在畫面外緣留一道淡淡的身分色，
      有球權時才鋪成一大片 —— 兩者除了濃度不同，面積也差很多，
      因此不必比較兩種顏色的明暗就能一眼看出球權在哪一側。 */
-  --wash-idle: 0.09;
-  --wash-idle-size: 26%;
-  --wash-serve: 0.86;
+  --wash-idle: 0.06;
+  --wash-idle-size: 20%;
+  --wash-serve: 1;
+  /* 漸層先維持滿濃度一段再開始衰減。純線性的斜坡有一半以上都在 50% 以下，
+     看起來「有顏色」的面積遠小於實際寬度；留一段平段可以大幅增加可讀到的
+     色塊，尾巴仍然是平滑淡出到透明。 */
+  --wash-hold: 30%;
   /* 疊在身分色之上的暗紗，與色暈同一條衰減曲線，因此只是把整片色暈
      壓暗、不改變它的形狀。--p2 這類淺色鋪到數字底下時，白色數字才不會
      失去對比 —— 用壓暗色暈解決，而不是替數字加描邊或陰影。 */
@@ -587,16 +591,26 @@ button.ghost:active {
    中央面板 z-index 較高，會正常蓋在色暈之上。 */
 #courtL::before {
   inset: 0 -50% 0 0;
-  background-image: linear-gradient(to right, var(--wash-veil), transparent),
-    linear-gradient(to right, var(--player), transparent);
+  background-image: linear-gradient(
+      to right,
+      var(--wash-veil),
+      var(--wash-veil) var(--wash-hold),
+      transparent
+    ),
+    linear-gradient(to right, var(--player), var(--player) var(--wash-hold), transparent);
   background-position: left center;
   background-size: var(--wash-idle-size) 100%;
 }
 
 #courtR::before {
   inset: 0 0 0 -50%;
-  background-image: linear-gradient(to left, var(--wash-veil), transparent),
-    linear-gradient(to left, var(--player), transparent);
+  background-image: linear-gradient(
+      to left,
+      var(--wash-veil),
+      var(--wash-veil) var(--wash-hold),
+      transparent
+    ),
+    linear-gradient(to left, var(--player), var(--player) var(--wash-hold), transparent);
   background-position: right center;
   background-size: var(--wash-idle-size) 100%;
 }
@@ -616,25 +630,25 @@ button.ghost:active {
    #courtL::before 的 background-size。動畫執行時本來就會覆蓋這一條。 */
 #courtL.serving::before,
 #courtR.serving::before {
-  background-size: 82% 100%;
+  background-size: 86% 100%;
 }
 
 @keyframes serveReachX {
   from {
-    background-size: 60% 100%;
+    background-size: 56% 100%;
   }
   to {
-    background-size: 104% 100%;
+    background-size: 116% 100%;
   }
 }
 
 /* 直向版本。@keyframes 一律放頂層，巢狀在 @media 裡容易被處理鏈吃掉後續規則。 */
 @keyframes serveReachY {
   from {
-    background-size: 100% 60%;
+    background-size: 100% 56%;
   }
   to {
-    background-size: 100% 104%;
+    background-size: 100% 116%;
   }
 }
 
@@ -1330,16 +1344,26 @@ button.ghost:active {
   /* 直向時球場上下排列，色暈與呼吸方向都改為縱向 */
   #courtL::before {
     inset: 0 0 -50% 0;
-    background-image: linear-gradient(to bottom, var(--wash-veil), transparent),
-      linear-gradient(to bottom, var(--player), transparent);
+    background-image: linear-gradient(
+        to bottom,
+        var(--wash-veil),
+        var(--wash-veil) var(--wash-hold),
+        transparent
+      ),
+      linear-gradient(to bottom, var(--player), var(--player) var(--wash-hold), transparent);
     background-position: center top;
     background-size: 100% var(--wash-idle-size);
   }
 
   #courtR::before {
     inset: -50% 0 0 0;
-    background-image: linear-gradient(to top, var(--wash-veil), transparent),
-      linear-gradient(to top, var(--player), transparent);
+    background-image: linear-gradient(
+        to top,
+        var(--wash-veil),
+        var(--wash-veil) var(--wash-hold),
+        transparent
+      ),
+      linear-gradient(to top, var(--player), var(--player) var(--wash-hold), transparent);
     background-position: center bottom;
     background-size: 100% var(--wash-idle-size);
   }
@@ -1350,7 +1374,7 @@ button.ghost:active {
 
   #courtL.serving::before,
   #courtR.serving::before {
-    background-size: 100% 82%;
+    background-size: 100% 86%;
   }
 
   /* 直向時下方球場的暫停鍵也在正下方，結束鍵改靠左避開 */
