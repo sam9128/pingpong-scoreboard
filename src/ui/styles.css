@@ -537,7 +537,7 @@ button.ghost:active {
      有球權時才鋪成一大片 —— 兩者除了濃度不同，面積也差很多，
      因此不必比較兩種顏色的明暗就能一眼看出球權在哪一側。 */
   --wash-idle: 0.06;
-  --wash-idle-size: 20%;
+  --wash-idle-size: 15%;
   --wash-serve: 1;
   /* 漸層先維持滿濃度一段再開始衰減。純線性的斜坡有一半以上都在 50% 以下，
      看起來「有顏色」的面積遠小於實際寬度；留一段平段可以大幅增加可讀到的
@@ -587,10 +587,13 @@ button.ghost:active {
   transition: opacity 600ms var(--ease-breath), background-size 600ms var(--ease-breath);
 }
 
-/* 色暈往中央多延伸半個球場寬，才不會在欄位邊界被切斷；
-   中央面板 z-index 較高，會正常蓋在色暈之上。 */
+/* 色暈的畫布往中央延伸將近一個球場寬。
+   這個寬度是呼吸最寬端能不能「淡完」的關鍵：漸層寬度是畫布的百分比，
+   畫布不夠寬，最寬端的尾巴就會在邊界被硬切 —— 之前 -50% 搭 116% 時，
+   切點還留著 19.7% 的不透明度，看起來就是一條突兀的直邊。
+   現在最寬端 92% 的尾巴會在畫布內淡到全透明。 */
 #courtL::before {
-  inset: 0 -50% 0 0;
+  inset: 0 -95% 0 0;
   background-image: linear-gradient(
       to right,
       var(--wash-veil),
@@ -603,7 +606,7 @@ button.ghost:active {
 }
 
 #courtR::before {
-  inset: 0 0 0 -50%;
+  inset: 0 0 0 -95%;
   background-image: linear-gradient(
       to left,
       var(--wash-veil),
@@ -630,25 +633,27 @@ button.ghost:active {
    #courtL::before 的 background-size。動畫執行時本來就會覆蓋這一條。 */
 #courtL.serving::before,
 #courtR.serving::before {
-  background-size: 86% 100%;
+  background-size: 68% 100%;
 }
 
+/* 百分比是相對於加寬後的畫布：43% 與先前的 56% 等寬，92% 則比先前的
+   116% 更遠，而且尾巴完整淡完。 */
 @keyframes serveReachX {
   from {
-    background-size: 56% 100%;
+    background-size: 43% 100%;
   }
   to {
-    background-size: 116% 100%;
+    background-size: 92% 100%;
   }
 }
 
 /* 直向版本。@keyframes 一律放頂層，巢狀在 @media 裡容易被處理鏈吃掉後續規則。 */
 @keyframes serveReachY {
   from {
-    background-size: 100% 56%;
+    background-size: 100% 43%;
   }
   to {
-    background-size: 100% 116%;
+    background-size: 100% 92%;
   }
 }
 
@@ -1343,7 +1348,7 @@ button.ghost:active {
 
   /* 直向時球場上下排列，色暈與呼吸方向都改為縱向 */
   #courtL::before {
-    inset: 0 0 -50% 0;
+    inset: 0 0 -95% 0;
     background-image: linear-gradient(
         to bottom,
         var(--wash-veil),
@@ -1356,7 +1361,7 @@ button.ghost:active {
   }
 
   #courtR::before {
-    inset: -50% 0 0 0;
+    inset: -95% 0 0 0;
     background-image: linear-gradient(
         to top,
         var(--wash-veil),
@@ -1374,7 +1379,7 @@ button.ghost:active {
 
   #courtL.serving::before,
   #courtR.serving::before {
-    background-size: 100% 86%;
+    background-size: 100% 68%;
   }
 
   /* 直向時下方球場的暫停鍵也在正下方，結束鍵改靠左避開 */
