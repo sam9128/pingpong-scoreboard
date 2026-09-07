@@ -21,11 +21,52 @@
  * 語音播報也會被路由到耳機，平板喇叭不會出聲。
  */
 
-export type MediaKeyAction = 'left' | 'right';
+/** 可以指派動作的三個角色。 */
+export type MediaKeyRole = 'left' | 'right' | 'undo';
+
+/**
+ * 可指派的耳機按鍵。
+ *
+ * 這份清單直接受限於 MediaSessionAction：
+ *   nexttrack | pause | play | previoustrack | seekbackward | seekforward |
+ *   seekto | skipad | stop
+ *
+ * **音量鍵不在裡面，也做不到** —— 規格沒有音量動作，而音量鍵在 Android 與 iOS
+ * 都由作業系統直接吃掉調整音量，不會送到頁面（keydown 也收不到）。
+ *
+ * playpause 是一顆實體鍵的兩個事件：循環正在播時按下去送 pause，反之送 play，
+ * 因此兩個都要綁。
+ */
+export type MediaKeyBinding =
+  | 'none'
+  | 'previoustrack'
+  | 'nexttrack'
+  | 'playpause'
+  | 'seekbackward'
+  | 'seekforward';
+
+export type MediaKeyMap = Record<MediaKeyRole, MediaKeyBinding>;
+
+/** 多數耳機：單擊 = 播放暫停、雙擊 = 下一首、三擊 = 上一首。 */
+export const DEFAULT_MEDIA_MAP: MediaKeyMap = {
+  left: 'previoustrack',
+  right: 'nexttrack',
+  undo: 'playpause',
+};
+
+export const MEDIA_BINDING_LABELS: Record<MediaKeyBinding, string> = {
+  none: '不指定',
+  previoustrack: '上一首',
+  nexttrack: '下一首',
+  playpause: '播放／暫停',
+  seekbackward: '倒轉',
+  seekforward: '快轉',
+};
 
 export interface MediaKeysOptions {
-  onAction: (action: MediaKeyAction) => void;
+  onAction: (role: MediaKeyRole) => void;
   onStatus: (status: { active: boolean; message?: string }) => void;
+  getMap: () => MediaKeyMap;
 }
 
 /** Chrome for Android 要求媒體長度 >= 5 秒才給 full audio focus，這裡取 8 秒。 */
@@ -117,7 +158,13 @@ export class MediaKeyScorer {
     this.setPlaybackState('playing');
   }
 
+  /** 設定改動之後重新套用對應表。 */
+  refresh(): void {
+    if (this.wanted) this.bindHandlers();
+  }
+
   private bindHandlers(): void {
+    const map = this.opts.getMap();
     const ms = navigator.mediaSession;
     const set = (action: MediaSessionAction, fn: (() => void) | null) => {
       try {
@@ -127,12 +174,33 @@ export class MediaKeyScorer {
       }
     };
 
-    set('previoustrack', () => this.opts.onAction('left'));
-    set('nexttrack', () => this.opts.onAction('right'));
-    // 播放／暫停不拿來計分：按下去若真的把循環停掉，就會連帶失去 media
-    // session。這裡一律接回播放，讓按鍵維持有效。
-    set('play', () => this.keepAlive());
-    set('pause', () => this.keepAlive());
+    /** 找出被指派到這個按鍵的角色，沒有就回傳 null。 */
+    const roleFor = (binding: MediaKeyBinding): MediaKeyRole | null => {
+      for (const role of ['left', 'right', 'undo'] as MediaKeyRole[]) {
+        if (map[role] === binding) return role;
+      }
+      return null;
+    };
+
+    for (const [binding, action] of [
+      ['previoustrack', 'previoustrack'],
+      ['nexttrack', 'nexttrack'],
+      ['seekbackward', 'seekbackward'],
+      ['seekforward', 'seekforward'],
+    ] as [MediaKeyBinding, MediaSessionAction][]) {
+      const role = roleFor(binding);
+      set(action, role ? () => this.opts.onAction(role) : null);
+    }
+
+    // 播放／暫停一律要接管：不接的話按下去會真的把循環停掉，連帶失去
+    // media session，之後所有按鍵都會靜靜失效。有指派角色就順便執行。
+    const ppRole = roleFor('playpause');
+    const pp = () => {
+      this.keepAlive();
+      if (ppRole) this.opts.onAction(ppRole);
+    };
+    set('play', pp);
+    set('pause', pp);
 
     this.setMetadata();
     this.setPlaybackState('playing');
@@ -141,7 +209,15 @@ export class MediaKeyScorer {
   private clearHandlers(): void {
     if (!this.supported) return;
     const ms = navigator.mediaSession;
-    for (const a of ['previoustrack', 'nexttrack', 'play', 'pause'] as MediaSessionAction[]) {
+    const all: MediaSessionAction[] = [
+      'previoustrack',
+      'nexttrack',
+      'play',
+      'pause',
+      'seekbackward',
+      'seekforward',
+    ];
+    for (const a of all) {
       try {
         ms.setActionHandler(a, null);
       } catch {
@@ -156,7 +232,7 @@ export class MediaKeyScorer {
     try {
       navigator.mediaSession.metadata = new MediaMetadata({
         title: '乒乓球記分板',
-        artist: '上一曲 = 左方得分 · 下一曲 = 右方得分',
+        artist: '耳機按鍵計分中',
       });
     } catch {
       /* 忽略 */

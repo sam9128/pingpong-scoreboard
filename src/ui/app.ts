@@ -23,7 +23,8 @@ import type { Side, VoiceCommand, Vocabulary } from '../audio/stt';
 import * as store from '../store';
 import { createWakeLock } from '../wakelock';
 import { createUpdater } from '../pwa';
-import { MediaKeyScorer } from '../audio/mediakeys';
+import { DEFAULT_MEDIA_MAP, MEDIA_BINDING_LABELS, MediaKeyScorer } from '../audio/mediakeys';
+import type { MediaKeyBinding, MediaKeyRole } from '../audio/mediakeys';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => {
   const el = document.getElementById(id);
@@ -48,6 +49,13 @@ const VOCAB_FIELDS: [keyof Vocabulary, string][] = [
 
 /** 雙擊判定的時間窗。太長會把連續得分誤判成雙擊，太短則不好按。 */
 const DOUBLE_TAP_MS = 260;
+
+/** 三個可指派角色對應到設定畫面的下拉選單。 */
+const MAP_FIELDS: [MediaKeyRole, string][] = [
+  ['left', 'mapLeft'],
+  ['right', 'mapRight'],
+  ['undo', 'mapUndo'],
+];
 
 interface ModalAction {
   label: string;
@@ -105,7 +113,11 @@ export class App {
     });
 
     this.mediaKeys = new MediaKeyScorer({
-      onAction: (a) => this.addPoint(a),
+      getMap: () => this.prefs.mediaMap,
+      onAction: (role) => {
+        if (role === 'undo') this.undoByGesture();
+        else this.addPoint(role);
+      },
       onStatus: ({ message }) => {
         this.renderVoiceState();
         if (message) this.toast(message);
@@ -318,6 +330,19 @@ export class App {
     $('swTts').addEventListener('click', () => this.toggleTts());
     $('swStt').addEventListener('click', () => this.toggleStt());
     $('swMediaKeys').addEventListener('click', () => void this.toggleMediaKeys());
+
+    for (const [role, id] of MAP_FIELDS) {
+      $(id).addEventListener('change', () => {
+        this.assignMediaKey(role, $<HTMLSelectElement>(id).value as MediaKeyBinding);
+      });
+    }
+    $('btnMapReset').addEventListener('click', () => {
+      this.prefs.mediaMap = { ...DEFAULT_MEDIA_MAP };
+      store.savePrefs(this.prefs);
+      this.mediaKeys.refresh();
+      this.renderMediaMap();
+      this.toast('已還原預設對應');
+    });
     this.bindVoiceSettings();
   }
 
@@ -471,6 +496,7 @@ export class App {
     this.renderVoiceState();
     this.renderVoiceOptions();
     this.renderVoiceDiag();
+    this.renderMediaMap();
     this.renderVocabFields();
     this.renderUpdateRow();
     ($('rngRate') as HTMLInputElement).value = String(this.announcer.rate);
@@ -653,6 +679,38 @@ export class App {
     const lang = d.resolvedLang ? `（${d.resolvedLang}）` : '';
     const off = this.announcer.enabled ? '' : ' · 語音播報目前是關閉的';
     el.textContent = `可用語音 ${d.total} 個，其中中文 ${d.chinese} 個；目前使用 ${d.resolved ?? '系統預設'}${lang}。${off}`;
+  }
+
+  /**
+   * 指派一顆按鍵給某個角色。
+   *
+   * 一顆鍵只能對應一個角色，否則同一次按下會同時加分又復原。搶過來時
+   * 把原本持有它的角色改成「不指定」，而不是拒絕使用者的選擇。
+   */
+  private assignMediaKey(role: MediaKeyRole, binding: MediaKeyBinding): void {
+    const map = { ...this.prefs.mediaMap };
+    if (binding !== 'none') {
+      for (const other of ['left', 'right', 'undo'] as MediaKeyRole[]) {
+        if (other !== role && map[other] === binding) map[other] = 'none';
+      }
+    }
+    map[role] = binding;
+    this.prefs.mediaMap = map;
+    store.savePrefs(this.prefs);
+    this.mediaKeys.refresh();
+    this.renderMediaMap();
+  }
+
+  private renderMediaMap(): void {
+    for (const [role, id] of MAP_FIELDS) {
+      const sel = $<HTMLSelectElement>(id);
+      sel.replaceChildren(
+        ...(Object.keys(MEDIA_BINDING_LABELS) as MediaKeyBinding[]).map(
+          (b) => new Option(MEDIA_BINDING_LABELS[b], b),
+        ),
+      );
+      sel.value = this.prefs.mediaMap[role];
+    }
   }
 
   private renderVocabFields(): void {
@@ -1002,6 +1060,7 @@ export class App {
     const s = this.state;
     const court = $(`court${suffix}`);
     court.style.setProperty('--player', player === 0 ? 'var(--p1)' : 'var(--p2)');
+    court.style.setProperty('--player-wash', player === 0 ? 'var(--p1-wash)' : 'var(--p2-wash)');
 
     const score = $(`score${suffix}`);
     if (score.textContent !== String(s.points[player])) {

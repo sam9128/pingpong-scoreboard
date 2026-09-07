@@ -1,4 +1,6 @@
 import { DEFAULT_VOCAB } from './audio/stt';
+import { DEFAULT_MEDIA_MAP } from './audio/mediakeys';
+import type { MediaKeyBinding, MediaKeyMap } from './audio/mediakeys';
 import type { Vocabulary } from './audio/stt';
 import type { BestOf, MatchConfig, MatchEvent, PlayerIndex } from './rules/types';
 
@@ -81,8 +83,10 @@ export interface Prefs {
   tts: boolean;
   /** 語音計分開關 */
   stt: boolean;
-  /** 耳機媒體鍵計分開關（上一曲 = 左方得分、下一曲 = 右方得分） */
+  /** 耳機媒體鍵計分開關 */
   mediaKeys: boolean;
+  /** 三個角色各自對應到哪一顆耳機按鍵 */
+  mediaMap: MediaKeyMap;
   /** 指定的播報語音；null 代表自動挑選中文語音。 */
   voiceURI: string | null;
   /** 播報語速。 */
@@ -101,6 +105,7 @@ export const DEFAULT_PREFS: Prefs = {
   tts: true,
   stt: true,
   mediaKeys: false,
+  mediaMap: DEFAULT_MEDIA_MAP,
   voiceURI: null,
   rate: 1.05,
   vocab: DEFAULT_VOCAB,
@@ -139,6 +144,7 @@ export function loadPrefs(): Prefs {
       // 的 stt 一律丟掉、改用新預設，其餘設定原封不動保留。
       stt: schema >= 2 && typeof v.stt === 'boolean' ? v.stt : DEFAULT_PREFS.stt,
       mediaKeys: typeof v.mediaKeys === 'boolean' ? v.mediaKeys : DEFAULT_PREFS.mediaKeys,
+      mediaMap: readMediaMap(v.mediaMap),
       voiceURI: typeof v.voiceURI === 'string' && v.voiceURI ? v.voiceURI : null,
       rate: typeof v.rate === 'number' && v.rate >= 0.6 && v.rate <= 1.6 ? v.rate : DEFAULT_PREFS.rate,
       vocab: readVocab(v.vocab),
@@ -147,6 +153,24 @@ export function loadPrefs(): Prefs {
   } catch {
     return { ...DEFAULT_PREFS };
   }
+}
+
+/** 認不得的按鍵一律回退成預設值，避免舊資料或手改的內容讓對應表失效。 */
+function readMediaMap(v: unknown): MediaKeyMap {
+  const valid: MediaKeyBinding[] = [
+    'none',
+    'previoustrack',
+    'nexttrack',
+    'playpause',
+    'seekbackward',
+    'seekforward',
+  ];
+  const src = (typeof v === 'object' && v !== null ? v : {}) as Partial<MediaKeyMap>;
+  const pick = (role: keyof MediaKeyMap): MediaKeyBinding =>
+    valid.includes(src[role] as MediaKeyBinding)
+      ? (src[role] as MediaKeyBinding)
+      : DEFAULT_MEDIA_MAP[role];
+  return { left: pick('left'), right: pick('right'), undo: pick('undo') };
 }
 
 /** 任一類別若空掉或格式不符，就回退成該類別的預設詞，避免整組指令失效。 */

@@ -26,6 +26,13 @@
   /* ── 選手身分色：刻意遠離主色，避免與球權指示混淆 ── */
   --p1: #e5a33d;
   --p2: #4fd1c5;
+  /* 色暈專用的濃色版本。
+     戶外的問題不是飽和度不夠，而是環境反光會同時加到兩側，把「對比比值」
+     壓平 —— 撐得住的是兩側的「絕對亮度差」。因此色暈用比身分色更濃、更亮的
+     版本，把亮度差拉開；上限則由白色數字決定：疊完暗紗後仍要對白色 >= 3:1
+     （大字級的 WCAG 門檻）。實測落點見 --wash-veil。 */
+  --p1-wash: #f09000;
+  --p2-wash: #00bfae;
 
   --danger: #e5484d;
 
@@ -532,6 +539,7 @@ button.ghost:active {
    顏色跟著選手走、不跟著場地走。 */
 .court {
   --player: var(--p2);
+  --player-wash: var(--p2-wash);
   --court-pad: clamp(6px, 1vw, 18px);
   /* 色暈的兩種狀態。沒有球權時只在畫面外緣留一道淡淡的身分色，
      有球權時才鋪成一大片 —— 兩者除了濃度不同，面積也差很多，
@@ -544,9 +552,11 @@ button.ghost:active {
      色塊，尾巴仍然是平滑淡出到透明。 */
   --wash-hold: 30%;
   /* 疊在身分色之上的暗紗，與色暈同一條衰減曲線，因此只是把整片色暈
-     壓暗、不改變它的形狀。--p2 這類淺色鋪到數字底下時，白色數字才不會
-     失去對比 —— 用壓暗色暈解決，而不是替數字加描邊或陰影。 */
-  --wash-veil: rgba(0, 0, 0, 0.42);
+     壓暗、不改變它的形狀。淺色鋪到數字底下時，白色數字才不會失去對比 ——
+     用壓暗色暈解決，而不是替數字加描邊或陰影。
+     0.42 太重，戶外會把色暈一起吃掉；改成 0.18，實測合成後的亮度差由
+     0.13 / 0.15 提高到 0.25 / 0.26，對白色仍有 3.5:1 與 3.4:1。 */
+  --wash-veil: rgba(0, 0, 0, 0.18);
   position: relative;
   display: grid;
   grid-template-rows: 1fr auto 1fr;
@@ -600,7 +610,7 @@ button.ghost:active {
       var(--wash-veil) var(--wash-hold),
       transparent
     ),
-    linear-gradient(to right, var(--player), var(--player) var(--wash-hold), transparent);
+    linear-gradient(to right, var(--player-wash), var(--player-wash) var(--wash-hold), transparent);
   background-position: left center;
   background-size: var(--wash-idle-size) 100%;
 }
@@ -613,7 +623,7 @@ button.ghost:active {
       var(--wash-veil) var(--wash-hold),
       transparent
     ),
-    linear-gradient(to left, var(--player), var(--player) var(--wash-hold), transparent);
+    linear-gradient(to left, var(--player-wash), var(--player-wash) var(--wash-hold), transparent);
   background-position: right center;
   background-size: var(--wash-idle-size) 100%;
 }
@@ -1357,7 +1367,7 @@ button.ghost:active {
         var(--wash-veil) var(--wash-hold),
         transparent
       ),
-      linear-gradient(to bottom, var(--player), var(--player) var(--wash-hold), transparent);
+      linear-gradient(to bottom, var(--player-wash), var(--player-wash) var(--wash-hold), transparent);
     background-position: center top;
     background-size: 100% var(--wash-idle-size);
   }
@@ -1370,7 +1380,7 @@ button.ghost:active {
         var(--wash-veil) var(--wash-hold),
         transparent
       ),
-      linear-gradient(to top, var(--player), var(--player) var(--wash-hold), transparent);
+      linear-gradient(to top, var(--player-wash), var(--player-wash) var(--wash-hold), transparent);
     background-position: center bottom;
     background-size: 100% var(--wash-idle-size);
   }

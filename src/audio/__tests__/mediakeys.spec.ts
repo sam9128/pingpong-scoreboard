@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { MediaKeyScorer, silentLoopUrl } from '../mediakeys';
+import { DEFAULT_MEDIA_MAP, MediaKeyScorer, silentLoopUrl } from '../mediakeys';
+import type { MediaKeyMap, MediaKeyRole } from '../mediakeys';
 
 /**
  * 這組測試守兩件事：
@@ -47,8 +48,10 @@ class FakeAudioCtor implements FakeAudio {
   load(): void {}
 }
 
-function makeScorer(onAction: (a: 'left' | 'right') => void = () => undefined) {
-  return new MediaKeyScorer({ onAction, onStatus: () => undefined });
+let map: MediaKeyMap = { ...DEFAULT_MEDIA_MAP };
+
+function makeScorer(onAction: (r: MediaKeyRole) => void = () => undefined) {
+  return new MediaKeyScorer({ onAction, onStatus: () => undefined, getMap: () => map });
 }
 
 beforeEach(() => {
@@ -57,6 +60,7 @@ beforeEach(() => {
   audios = [];
   blobs = [];
   playShouldFail = false;
+  map = { ...DEFAULT_MEDIA_MAP };
 
   const g = globalThis as unknown as Record<string, unknown>;
   g.window = globalThis;
@@ -111,14 +115,54 @@ describe('循環音訊', () => {
 });
 
 describe('MediaKeyScorer', () => {
-  it('上一曲 = 左方得分、下一曲 = 右方得分', async () => {
+  it('預設對應：上一曲 = 左、下一曲 = 右、播放暫停 = 返回', async () => {
     const got: string[] = [];
-    const scorer = makeScorer((a) => got.push(a));
+    const scorer = makeScorer((r) => got.push(r));
     await scorer.enable();
 
     handlers['previoustrack']?.();
     handlers['nexttrack']?.();
+    handlers['pause']?.();
+    expect(got).toEqual(['left', 'right', 'undo']);
+  });
+
+  it('照著對應表走 —— 換成快轉／倒轉也一樣', async () => {
+    map = { left: 'seekbackward', right: 'seekforward', undo: 'none' };
+    const got: string[] = [];
+    const scorer = makeScorer((r) => got.push(r));
+    await scorer.enable();
+
+    handlers['seekbackward']?.();
+    handlers['seekforward']?.();
     expect(got).toEqual(['left', 'right']);
+    // 沒有指派的按鍵不可以殘留舊的處理函式
+    expect(handlers['previoustrack']).toBeNull();
+    expect(handlers['nexttrack']).toBeNull();
+  });
+
+  it('沒有角色用 playpause 時，它仍然要接管，否則會失去 media session', async () => {
+    map = { left: 'previoustrack', right: 'nexttrack', undo: 'none' };
+    const got: string[] = [];
+    const scorer = makeScorer((r) => got.push(r));
+    await scorer.enable();
+    const el = audios.at(-1);
+
+    el?.pause();
+    handlers['pause']?.();
+    expect(got).toEqual([]);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(el?.paused).toBe(false);
+  });
+
+  it('refresh() 會套用改過的對應表', async () => {
+    const got: string[] = [];
+    const scorer = makeScorer((r) => got.push(r));
+    await scorer.enable();
+
+    map = { ...map, left: 'nexttrack', right: 'none' };
+    scorer.refresh();
+    handlers['nexttrack']?.();
+    expect(got).toEqual(['left']);
   });
 
   it('接管後循環是播放中的，而且音量非零', async () => {
@@ -144,21 +188,6 @@ describe('MediaKeyScorer', () => {
     expect(el?.paused).toBe(false);
   });
 
-  it('播放／暫停鍵不計分，只把循環接回來', async () => {
-    const got: string[] = [];
-    const scorer = makeScorer((a) => got.push(a));
-    await scorer.enable();
-    const el = audios.at(-1);
-
-    el?.pause();
-    handlers['pause']?.();
-    handlers['play']?.();
-    expect(got).toEqual([]);
-
-    await vi.advanceTimersByTimeAsync(1000);
-    expect(el?.paused).toBe(false);
-  });
-
   it('keepAlive 在播報之後把被搶走的循環接回來', async () => {
     const scorer = makeScorer();
     await scorer.enable();
@@ -177,7 +206,7 @@ describe('MediaKeyScorer', () => {
 
     scorer.disable();
     expect(scorer.active).toBe(false);
-    for (const a of ['previoustrack', 'nexttrack', 'play', 'pause']) {
+    for (const a of ['previoustrack', 'nexttrack', 'play', 'pause', 'seekbackward', 'seekforward']) {
       expect(handlers[a]).toBeNull();
     }
 
