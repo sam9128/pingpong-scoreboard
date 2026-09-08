@@ -35,6 +35,9 @@
   --p2-wash: #00bfae;
 
   --danger: #e5484d;
+  /* 紅色底線球權：強光模式。實心硬邊在陽光下比漸層耐得住 —— 環境反光把
+     漸層的軟邊糊掉，硬邊仍然看得出來。亮度差 0.243、對底色 5.6:1。 */
+  --serve-bar: #ff3b30;
 
   /* ── 線條 ─────────────────────────────────────── */
   --border: rgba(255, 255, 255, 0.06);
@@ -547,6 +550,11 @@ button.ghost:active {
   --wash-idle: 0.06;
   --wash-idle-size: 15%;
   --wash-serve: 1;
+  /* 呼吸的動畫名稱與發球側寬度都做成自訂屬性，紅色底線模式只要改這兩個
+     變數就能關掉效果。改變數比用後代選擇器去蓋 ::before 可靠 —— 遠端祖先
+     換 class 時，Chrome 不一定會重算 ::before 的樣式。 */
+  --serve-anim-name: serveReachX;
+  --serve-size: 68%;
   /* 漸層先維持滿濃度一段再開始衰減。純線性的斜坡有一半以上都在 50% 以下，
      看起來「有顏色」的面積遠小於實際寬度；留一段平段可以大幅增加可讀到的
      色塊，尾巴仍然是平滑淡出到透明。 */
@@ -628,6 +636,39 @@ button.ghost:active {
   background-size: var(--wash-idle-size) 100%;
 }
 
+/* 紅色底線球權（強光模式）。放在球場格線的第三列，剛好落在比分正下方。
+   平常不佔版面：display 為 none 的格線項目不會產生列高。 */
+.court::after {
+  content: '';
+  grid-row: 3;
+  align-self: start;
+  justify-self: center;
+  display: none;
+  width: calc(var(--score-size) * 1.15);
+  max-width: 88%;
+  /* 高度用百分比 —— 格線項目的百分比高度是相對於所在列，而第三列的高度
+     正好就是比分下方剩餘的空間。實測這段空間差很多（平板橫向 161px、
+     手機橫向 24px、平板直向 18px），寫死任何一個值都會在別處撞到暫停鍵。 */
+  height: 14%;
+  min-height: 5px;
+  max-height: calc(var(--score-size) * 0.1);
+  margin-top: 4px;
+  border-radius: 999px;
+  background: var(--serve-bar);
+}
+
+.board.serve-bar .court.serving::after {
+  display: block;
+}
+
+/* 開了底線就把色暈退回「只剩身分色」：不加深、不呼吸。
+   改的是 .court 上的變數，::before 會跟著重算。 */
+.board.serve-bar .court {
+  --wash-serve: var(--wash-idle);
+  --serve-anim-name: none;
+  --serve-size: var(--wash-idle-size);
+}
+
 /* 球權指示：發球方的色暈加深，並讓「延伸範圍」呼吸（濃度維持不變）。
    不再使用外框與輝光 —— 色暈本身就是畫面上面積最大的指示。
    用 background-size 而非漸層停止點，才能在各瀏覽器都平滑補間。 */
@@ -635,7 +676,7 @@ button.ghost:active {
   opacity: var(--wash-serve);
   /* alternate + 對稱的 ease-in-out：兩端速度歸零，不會像 expo-out 那樣
      衝出去再急停，也不會在 50% 影格瞬間反向。單程 2.4s、來回約 4.8s。 */
-  animation: serveReachX 2.4s var(--ease-breath) infinite alternate;
+  animation: var(--serve-anim-name) 2.4s var(--ease-breath) infinite alternate;
 }
 
 /* 呼吸的範圍是動畫給的，動畫一旦被停用（prefers-reduced-motion）就只會剩下
@@ -643,7 +684,7 @@ button.ghost:active {
    #courtL::before 的 background-size。動畫執行時本來就會覆蓋這一條。 */
 #courtL.serving::before,
 #courtR.serving::before {
-  background-size: 68% 100%;
+  background-size: var(--serve-size) 100%;
 }
 
 /* 百分比是相對於加寬後的畫布：43% 與先前的 56% 等寬，92% 則比先前的
@@ -1385,13 +1426,18 @@ button.ghost:active {
     background-size: 100% var(--wash-idle-size);
   }
 
-  .court.serving::before {
-    animation-name: serveReachY;
+  .court {
+    --serve-anim-name: serveReachY;
+  }
+
+  /* 直向的球場矮很多，底線收窄一點 */
+  .court::after {
+    width: calc(var(--score-size) * 0.95);
   }
 
   #courtL.serving::before,
   #courtR.serving::before {
-    background-size: 100% 68%;
+    background-size: 100% var(--serve-size);
   }
 
   /* 直向時下方球場的暫停鍵也在正下方，結束鍵改靠左避開 */

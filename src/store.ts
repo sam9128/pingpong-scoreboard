@@ -89,6 +89,8 @@ export interface Prefs {
   mediaMap: MediaKeyMap;
   /** 兩個加分鍵跟著位置還是跟著人 */
   mediaFollow: MediaFollow;
+  /** 球權改用紅色底線（強光模式），並關閉色暈的呼吸與加深 */
+  serveBar: boolean;
   /** 指定的播報語音；null 代表自動挑選中文語音。 */
   voiceURI: string | null;
   /** 播報語速。 */
@@ -109,6 +111,7 @@ export const DEFAULT_PREFS: Prefs = {
   mediaKeys: false,
   mediaMap: DEFAULT_MEDIA_MAP,
   mediaFollow: 'side',
+  serveBar: false,
   voiceURI: null,
   rate: 1.05,
   vocab: DEFAULT_VOCAB,
@@ -149,6 +152,7 @@ export function loadPrefs(): Prefs {
       mediaKeys: typeof v.mediaKeys === 'boolean' ? v.mediaKeys : DEFAULT_PREFS.mediaKeys,
       mediaMap: readMediaMap(v.mediaMap),
       mediaFollow: v.mediaFollow === 'player' ? 'player' : DEFAULT_PREFS.mediaFollow,
+      serveBar: typeof v.serveBar === 'boolean' ? v.serveBar : DEFAULT_PREFS.serveBar,
       voiceURI: typeof v.voiceURI === 'string' && v.voiceURI ? v.voiceURI : null,
       rate: typeof v.rate === 'number' && v.rate >= 0.6 && v.rate <= 1.6 ? v.rate : DEFAULT_PREFS.rate,
       vocab: readVocab(v.vocab),

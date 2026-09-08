@@ -168,6 +168,7 @@ export class App {
     store.savePrefs(this.prefs);
 
     $('setupVersion').textContent = __BUILD_ID__;
+    this.applyServeStyle();
     $('btnTtsQuick').addEventListener('click', () => this.toggleTts());
     $('btnSttQuick').addEventListener('click', () => this.toggleStt());
     $('btnMediaKeysQuick').addEventListener('click', () => void this.toggleMediaKeys());
@@ -339,6 +340,12 @@ export class App {
     $('swTts').addEventListener('click', () => this.toggleTts());
     $('swStt').addEventListener('click', () => this.toggleStt());
     $('swMediaKeys').addEventListener('click', () => void this.toggleMediaKeys());
+
+    $('swServeBar').addEventListener('click', () => {
+      this.prefs.serveBar = !this.prefs.serveBar;
+      store.savePrefs(this.prefs);
+      this.applyServeStyle();
+    });
 
     for (const [role, id] of MAP_FIELDS) {
       $(id).addEventListener('change', () => {
@@ -673,6 +680,12 @@ export class App {
   }
 
   /** 「為什麼沒有聲音」的說明。Android 沒裝中文語音是最常見的原因。 */
+  /** 球權的呈現方式：色暈（預設）或紅色底線（強光模式）。 */
+  private applyServeStyle(): void {
+    $('board').classList.toggle('serve-bar', this.prefs.serveBar);
+    $('swServeBar').setAttribute('aria-checked', String(this.prefs.serveBar));
+  }
+
   private renderVoiceDiag(): void {
     const el = $('voiceDiag');
     const d = this.announcer.diagnose();
