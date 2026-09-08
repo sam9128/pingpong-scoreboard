@@ -199,6 +199,61 @@ describe('MediaKeyScorer', () => {
     expect(el?.paused).toBe(false);
   });
 
+  it('同一次按鍵送來 pause 再送 play 只算一分', async () => {
+    const got: string[] = [];
+    const scorer = makeScorer((r) => got.push(r));
+    await scorer.enable();
+
+    // 我們被暫停後會立刻接回去，狀態一翻系統可能補送另一發。
+    handlers['pause']?.();
+    handlers['play']?.();
+    expect(got).toEqual(['undo']);
+
+    // 隔得夠久就是真的按了第二下。
+    await vi.advanceTimersByTimeAsync(400);
+    handlers['pause']?.();
+    expect(got).toEqual(['undo', 'undo']);
+  });
+
+  it('播報之後重新宣告 media session —— 只是還在播不夠', async () => {
+    const scorer = makeScorer();
+    await scorer.enable();
+    const el = audios.at(-1);
+    expect(el?.paused).toBe(false);
+
+    scorer.keepAlive(true);
+    await vi.advanceTimersByTimeAsync(1000);
+    // 中間做過一次停→播的狀態轉換，結束時必須回到播放中。
+    expect(el?.paused).toBe(false);
+    expect(navigator.mediaSession.playbackState).toBe('playing');
+  });
+
+  it('循環在無人察覺時停掉，看門狗會把它接回來', async () => {
+    const scorer = makeScorer();
+    await scorer.enable();
+    const el = audios.at(-1);
+
+    // 沒有 onpause 事件的失去焦點（例如被系統直接靜掉）
+    if (el) el.paused = true;
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(el?.paused).toBe(false);
+  });
+
+  it('每個收到的動作都會回報，方便在手機上確認按鍵有沒有送到', async () => {
+    const seen: string[] = [];
+    const scorer = new MediaKeyScorer({
+      onAction: () => undefined,
+      onStatus: () => undefined,
+      getMap: () => map,
+      onKey: (a) => seen.push(a),
+    });
+    await scorer.enable();
+
+    handlers['nexttrack']?.();
+    handlers['pause']?.();
+    expect(seen).toEqual(['nexttrack', 'pause']);
+  });
+
   it('disable() 之後解除所有 handler，也不再自動接回', async () => {
     const scorer = makeScorer();
     await scorer.enable();

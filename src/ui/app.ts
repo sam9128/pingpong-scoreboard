@@ -51,6 +51,16 @@ const VOCAB_FIELDS: [keyof Vocabulary, string][] = [
 const DOUBLE_TAP_MS = 260;
 
 /** 三個可指派角色對應到設定畫面的下拉選單。 */
+/** 診斷用：把送進來的動作名稱講成人話。 */
+const MEDIA_ACTION_LABELS: Record<string, string> = {
+  previoustrack: '上一首',
+  nexttrack: '下一首',
+  play: '播放',
+  pause: '暫停',
+  seekbackward: '倒轉',
+  seekforward: '快轉',
+};
+
 const MAP_FIELDS: [MediaKeyRole, string][] = [
   ['left', 'mapLeft'],
   ['right', 'mapRight'],
@@ -95,6 +105,8 @@ export class App {
   private readonly wake = createWakeLock();
   private readonly updater = createUpdater();
   private readonly mediaKeys: MediaKeyScorer;
+  /** 最近收到的媒體動作，設定面板的診斷用。 */
+  private readonly mediaLog: string[] = [];
   /** 新版已下載但比賽正在進行，等回到首頁再套用。 */
   private updateDeferred = false;
 
@@ -114,6 +126,7 @@ export class App {
 
     this.mediaKeys = new MediaKeyScorer({
       getMap: () => this.prefs.mediaMap,
+      onKey: (action) => this.logMediaKey(action),
       onAction: (role) => {
         if (role === 'undo') {
           this.undoByGesture();
@@ -139,9 +152,10 @@ export class App {
         this.voice.pause();
       } else {
         this.voice.resume();
-        // 播報會短暫搶走音訊焦點，回來確認循環還在播 —— 循環一停就等於
-        // 失去 media session，耳機按鍵會靜靜地失效。
-        this.mediaKeys.keepAlive();
+        // 播報會短暫搶走音訊焦點，回來要把 media session 重新宣告一次 ——
+        // 只是「循環還在播」不夠，系統可能仍把耳機按鍵送給剛播完的那個，
+        // 症狀是第一下沒反應、第二下才計分。
+        this.mediaKeys.keepAlive(true);
       }
     };
 
@@ -519,6 +533,7 @@ export class App {
     this.renderVoiceOptions();
     this.renderVoiceDiag();
     this.renderMediaMap();
+    this.renderMediaDiag();
     this.renderVocabFields();
     this.renderUpdateRow();
     ($('rngRate') as HTMLInputElement).value = String(this.announcer.rate);
@@ -725,6 +740,26 @@ export class App {
     store.savePrefs(this.prefs);
     this.mediaKeys.refresh();
     this.renderMediaMap();
+  }
+
+  /**
+   * 記下實際收到的媒體動作。耳機按了沒反應時，這裡能分辨是「按鍵根本沒送到
+   * 頁面」還是「送到了但對應到不指定」—— 兩者的處置完全不同。
+   */
+  private logMediaKey(action: string): void {
+    this.mediaLog.push(action);
+    if (this.mediaLog.length > 8) this.mediaLog.shift();
+    if (!$('settings').hidden) this.renderMediaDiag();
+  }
+
+  private renderMediaDiag(): void {
+    const el = $('mediaDiag');
+    if (!this.mediaLog.length) {
+      el.textContent = '按一下耳機按鍵，這裡會顯示實際收到的動作。';
+      return;
+    }
+    const seq = this.mediaLog.map((a) => MEDIA_ACTION_LABELS[a] ?? a).join(' → ');
+    el.textContent = `實際收到：${seq}`;
   }
 
   private renderMediaMap(): void {

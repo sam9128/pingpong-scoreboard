@@ -76,13 +76,24 @@ export interface MediaKeysOptions {
   onAction: (role: MediaKeyRole) => void;
   onStatus: (status: { active: boolean; message?: string }) => void;
   getMap: () => MediaKeyMap;
+  /** 實際收到的動作，給設定面板的診斷用 —— 沒收到跟收到了沒作用是兩回事。 */
+  onKey?: (action: MediaSessionAction) => void;
 }
 
 /** Chrome for Android 要求媒體長度 >= 5 秒才給 full audio focus，這裡取 8 秒。 */
 const LOOP_SECONDS = 8;
 const SAMPLE_RATE = 8000;
-/** play() 被擋下後的重試間隔，避免失敗時空轉。 */
-const RETRY_MS = 800;
+/**
+ * 循環一停就等於失去 media session，所以第一次重試不等待。
+ * 只有連續失敗（多半是別的 App 正握著音訊焦點）才逐步退讓。
+ */
+const RETRY_STEPS = [0, 400, 900, 1800, 3000];
+/** 循環有沒有真的在播，畫面上看不出來，定期自己確認。 */
+const WATCH_MS = 2000;
+/** 播報結束到重新搶回 media session 之間的緩衝。 */
+const REASSERT_MS = 250;
+/** 同一次實體按鍵有機會送出 play 與 pause 兩發，只能算一次。 */
+const PP_DEDUPE_MS = 300;
 
 export class MediaKeyScorer {
   readonly supported: boolean;
@@ -91,6 +102,10 @@ export class MediaKeyScorer {
   private url: string | null = null;
   private wanted = false;
   private retryTimer: number | null = null;
+  private retries = 0;
+  private watchTimer: number | null = null;
+  private reassertTimer: number | null = null;
+  private lastPp = 0;
 
   constructor(private opts: MediaKeysOptions) {
     this.supported =
@@ -132,7 +147,9 @@ export class MediaKeyScorer {
       return false;
     }
 
+    this.retries = 0;
     this.bindHandlers();
+    this.startWatch();
     this.opts.onStatus({ active: true });
     return true;
   }
@@ -140,6 +157,7 @@ export class MediaKeyScorer {
   disable(): void {
     this.wanted = false;
     this.clearRetry();
+    this.clearWatch();
     this.clearHandlers();
 
     const el = this.el;
@@ -158,13 +176,21 @@ export class MediaKeyScorer {
   }
 
   /**
-   * 確認循環還在播。語音播報會短暫搶走音訊焦點，播完要回來確認一下，
-   * 否則 media session 掉了、按鍵就沒反應，而畫面上完全看不出來。
+   * 確認循環還在播，並且重新宣告自己是被路由的那個 media session。
+   *
+   * 光是「還在播」不夠：Android 的語音播報自己也會去要音訊焦點，播完之後
+   * 系統仍可能把耳機按鍵送給它而不是我們 —— 症狀就是第一下按了沒反應、
+   * 第二下才計分。重新註冊 handler 與 metadata 可以把路由要回來，
+   * force 會再補一次播放狀態轉換，那是最強的一種宣告。
    */
-  keepAlive(): void {
+  keepAlive(force = false): void {
     if (!this.wanted || !this.el) return;
-    if (this.el.paused) this.scheduleResume();
-    this.setPlaybackState('playing');
+    this.bindHandlers();
+    if (this.el.paused) {
+      this.scheduleResume();
+      return;
+    }
+    if (force) this.scheduleReassert();
   }
 
   /** 設定改動之後重新套用對應表。 */
@@ -198,18 +224,36 @@ export class MediaKeyScorer {
       ['seekforward', 'seekforward'],
     ] as [MediaKeyBinding, MediaSessionAction][]) {
       const role = roleFor(binding);
-      set(action, role ? () => this.opts.onAction(role) : null);
+      set(
+        action,
+        role
+          ? () => {
+              this.opts.onKey?.(action);
+              this.opts.onAction(role);
+            }
+          : null,
+      );
     }
 
     // 播放／暫停一律要接管：不接的話按下去會真的把循環停掉，連帶失去
     // media session，之後所有按鍵都會靜靜失效。有指派角色就順便執行。
+    //
+    // 這顆鍵送過來的是 play 還是 pause 由系統看當下的播放狀態決定，兩個都要
+    // 綁；而我們被暫停後會立刻接回去，狀態一翻有機會補送另一發，因此同一次
+    // 實體按鍵可能收到兩次 —— 短時間內只算一次。
     const ppRole = roleFor('playpause');
-    const pp = () => {
-      this.keepAlive();
-      if (ppRole) this.opts.onAction(ppRole);
+    const pp = (action: MediaSessionAction) => {
+      this.opts.onKey?.(action);
+      if (this.el?.paused) this.scheduleResume();
+      this.setPlaybackState('playing');
+      if (!ppRole) return;
+      const now = Date.now();
+      if (now - this.lastPp < PP_DEDUPE_MS) return;
+      this.lastPp = now;
+      this.opts.onAction(ppRole);
     };
-    set('play', pp);
-    set('pause', pp);
+    set('play', () => pp('play'));
+    set('pause', () => pp('pause'));
 
     this.setMetadata();
     this.setPlaybackState('playing');
@@ -268,13 +312,62 @@ export class MediaKeyScorer {
 
   private scheduleResume(): void {
     if (this.retryTimer !== null) return;
+    const wait = RETRY_STEPS[Math.min(this.retries, RETRY_STEPS.length - 1)] ?? 0;
     this.retryTimer = window.setTimeout(() => {
       this.retryTimer = null;
       if (!this.wanted) return;
       void this.play().then((ok) => {
-        if (!ok && this.wanted) this.scheduleResume();
+        if (ok) {
+          this.retries = 0;
+          this.setPlaybackState('playing');
+          return;
+        }
+        this.retries++;
+        if (this.wanted) this.scheduleResume();
       });
-    }, RETRY_MS);
+    }, wait);
+  }
+
+  /**
+   * 重新製造一次播放狀態轉換 —— 對系統來說「剛開始播的那個」才是該收按鍵的，
+   * 這是網頁端唯一能主動把路由搶回來的手段。
+   */
+  private scheduleReassert(): void {
+    if (this.reassertTimer !== null) return;
+    this.reassertTimer = window.setTimeout(() => {
+      this.reassertTimer = null;
+      const el = this.el;
+      if (!this.wanted || !el) return;
+      // 自己按的暫停不要觸發重連邏輯，否則會排到兩次播放。
+      const onpause = el.onpause;
+      el.onpause = null;
+      el.pause();
+      el.onpause = onpause;
+      void this.play().then((ok) => {
+        if (ok) this.setPlaybackState('playing');
+        else if (this.wanted) this.scheduleResume();
+      });
+    }, REASSERT_MS);
+  }
+
+  private startWatch(): void {
+    if (this.watchTimer !== null) return;
+    this.watchTimer = window.setInterval(() => {
+      if (!this.wanted || !this.el) return;
+      if (this.el.paused) this.scheduleResume();
+      else this.setPlaybackState('playing');
+    }, WATCH_MS);
+  }
+
+  private clearWatch(): void {
+    if (this.watchTimer !== null) {
+      clearInterval(this.watchTimer);
+      this.watchTimer = null;
+    }
+    if (this.reassertTimer !== null) {
+      clearTimeout(this.reassertTimer);
+      this.reassertTimer = null;
+    }
   }
 
   private clearRetry(): void {
@@ -282,6 +375,7 @@ export class MediaKeyScorer {
       clearTimeout(this.retryTimer);
       this.retryTimer = null;
     }
+    this.retries = 0;
   }
 }
 
