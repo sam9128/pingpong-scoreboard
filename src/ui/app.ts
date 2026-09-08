@@ -699,9 +699,7 @@ export class App {
       return;
     }
     if (d.chinese === 0) {
-      el.textContent =
-        `裝置上有 ${d.total} 個語音，但沒有中文語音 —— 播報中文不會有聲音。` +
-        '請到系統「設定 → 語言與輸入 → 文字轉語音輸出」安裝 Google 文字轉語音，並下載中文語音資料。';
+      el.textContent = `裝置上有 ${d.total} 個語音但沒有中文，請到系統的文字轉語音設定安裝中文語音。`;
       return;
     }
     const lang = d.resolvedLang ? `（${d.resolvedLang}）` : '';

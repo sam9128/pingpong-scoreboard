@@ -215,8 +215,7 @@
             <span class="switch-text">
               <b>語音計分</b>
               <small id="sttHint"
-                >說「左邊得分」「取消」等指令。需要網路連線。行動裝置每次重新收音都會發出系統提示音，這是
-                Android 的行為，關掉本項就會停止。</small
+                >說「左邊得分」「取消」等指令；需要網路連線，行動裝置會有收音提示音。</small
               >
             </span>
             <button class="switch" id="swStt" role="switch" aria-checked="false">
@@ -228,8 +227,7 @@
             <span class="switch-text">
               <b>耳機按鍵計分</b>
               <small id="mediaKeysHint"
-                >藍牙耳機的<b>上一曲 = 左方得分</b>、<b>下一曲 = 右方得分</b>。需要整場播放一段聽不見的音訊才收得到按鍵，
-                因此連上耳機後語音播報也會從耳機出聲，平板喇叭不會響。</small
+                >用藍牙耳機的按鍵計分；連上耳機後語音播報也會改從耳機出聲。</small
               >
             </span>
             <button class="switch" id="swMediaKeys" role="switch" aria-checked="false">
@@ -262,12 +260,7 @@
               <button class="set-action" id="btnMapReset">還原預設對應</button>
             </div>
             <p class="set-note">
-              多數耳機是單擊 = 播放／暫停、雙擊 = 下一首、三擊 = 上一首。同一顆鍵指派給新角色時，
-              原本的角色會自動改為「不指定」。<br />
-              <b>加分對象</b>決定換邊之後兩顆鍵指到誰：「跟著位置」是永遠加畫面同一半邊的分，
-              「跟著選手」則不管他站哪一邊都加同一個人的分。<br />
-              <b>音量鍵無法使用</b>：Media Session 規格沒有音量動作，而音量鍵在 Android 與 iOS
-              都由系統直接吃掉調整音量，不會送到網頁。
+              多數耳機：單擊 = 播放／暫停、雙擊 = 下一首、三擊 = 上一首；音量鍵無法使用。
             </p>
           </details>
         </div>
@@ -276,10 +269,7 @@
           <div class="switch-row">
             <span class="switch-text">
               <b>紅色底線球權</b>
-              <small>
-                改用比分下方的紅色實心底線標示發球方，適合強光或戶外 ——
-                實心硬邊比漸層耐得住環境反光。開啟後會關閉色暈的呼吸與加深，只留下淡淡的身分色。
-              </small>
+              <small>改用比分下方的紅色底線標示發球方，適合強光或戶外。</small>
             </span>
             <button class="switch" id="swServeBar" role="switch" aria-checked="false">
               <span class="switch-knob"></span>
@@ -311,10 +301,7 @@
             <label class="set-field"><span>明確計分詞</span><input id="vocPoint" type="text" autocomplete="off" /></label>
             <button class="set-action" id="btnVocabReset">還原預設指令</button>
           </div>
-          <p class="set-note">
-            用「、」或逗號分隔多個說法。句子含「明確計分詞」時一律採信，否則只接受 6 字以內的短句，
-            以免場邊閒聊誤觸。選手姓名永遠可用，不需在此設定。
-          </p>
+          <p class="set-note">用「、」或逗號分隔多個說法；選手姓名永遠可用。</p>
         </details>
 
         <div class="set-group">
