@@ -115,8 +115,17 @@ export class App {
     this.mediaKeys = new MediaKeyScorer({
       getMap: () => this.prefs.mediaMap,
       onAction: (role) => {
-        if (role === 'undo') this.undoByGesture();
-        else this.addPoint(role);
+        if (role === 'undo') {
+          this.undoByGesture();
+          return;
+        }
+        // 跟著選手：不管這一局站在哪一邊，左鍵永遠加給選手 A、右鍵加給選手 B。
+        // 跟著位置：加畫面上那一半邊的分，換邊之後就換成加給另一位。
+        if (this.prefs.mediaFollow === 'player') {
+          this.addPointTo(role === 'left' ? 0 : 1, 'tap');
+        } else {
+          this.addPoint(role);
+        }
       },
       onStatus: ({ message }) => {
         this.renderVoiceState();
@@ -336,6 +345,12 @@ export class App {
         this.assignMediaKey(role, $<HTMLSelectElement>(id).value as MediaKeyBinding);
       });
     }
+    $('mapFollow').addEventListener('change', () => {
+      this.prefs.mediaFollow = $<HTMLSelectElement>('mapFollow').value === 'player' ? 'player' : 'side';
+      store.savePrefs(this.prefs);
+      this.renderMediaMap();
+    });
+
     $('btnMapReset').addEventListener('click', () => {
       this.prefs.mediaMap = { ...DEFAULT_MEDIA_MAP };
       store.savePrefs(this.prefs);
@@ -702,6 +717,14 @@ export class App {
   }
 
   private renderMediaMap(): void {
+    const byPlayer = this.prefs.mediaFollow === 'player';
+    $<HTMLSelectElement>('mapFollow').value = this.prefs.mediaFollow;
+
+    // 標籤跟著模式走，否則「左邊加分」在跟著選手時是錯的說明。
+    const [a, b] = this.config.players;
+    $('mapLeftLabel').textContent = byPlayer ? `${a} 加分` : '左邊加分';
+    $('mapRightLabel').textContent = byPlayer ? `${b} 加分` : '右邊加分';
+
     for (const [role, id] of MAP_FIELDS) {
       const sel = $<HTMLSelectElement>(id);
       sel.replaceChildren(

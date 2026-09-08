@@ -241,11 +241,18 @@
             <summary>自訂耳機按鍵</summary>
             <div class="set-group">
               <div class="set-row">
-                <label class="set-label" for="mapLeft">左邊加分</label>
+                <label class="set-label" for="mapFollow">加分對象</label>
+                <select class="set-select" id="mapFollow">
+                  <option value="side">跟著位置（左／右半邊）</option>
+                  <option value="player">跟著選手（換邊後不變）</option>
+                </select>
+              </div>
+              <div class="set-row">
+                <label class="set-label" id="mapLeftLabel" for="mapLeft">左邊加分</label>
                 <select class="set-select" id="mapLeft"></select>
               </div>
               <div class="set-row">
-                <label class="set-label" for="mapRight">右邊加分</label>
+                <label class="set-label" id="mapRightLabel" for="mapRight">右邊加分</label>
                 <select class="set-select" id="mapRight"></select>
               </div>
               <div class="set-row">
@@ -257,6 +264,8 @@
             <p class="set-note">
               多數耳機是單擊 = 播放／暫停、雙擊 = 下一首、三擊 = 上一首。同一顆鍵指派給新角色時，
               原本的角色會自動改為「不指定」。<br />
+              <b>加分對象</b>決定換邊之後兩顆鍵指到誰：「跟著位置」是永遠加畫面同一半邊的分，
+              「跟著選手」則不管他站哪一邊都加同一個人的分。<br />
               <b>音量鍵無法使用</b>：Media Session 規格沒有音量動作，而音量鍵在 Android 與 iOS
               都由系統直接吃掉調整音量，不會送到網頁。
             </p>

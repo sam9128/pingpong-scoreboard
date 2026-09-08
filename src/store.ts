@@ -1,6 +1,6 @@
 import { DEFAULT_VOCAB } from './audio/stt';
 import { DEFAULT_MEDIA_MAP } from './audio/mediakeys';
-import type { MediaKeyBinding, MediaKeyMap } from './audio/mediakeys';
+import type { MediaFollow, MediaKeyBinding, MediaKeyMap } from './audio/mediakeys';
 import type { Vocabulary } from './audio/stt';
 import type { BestOf, MatchConfig, MatchEvent, PlayerIndex } from './rules/types';
 
@@ -87,6 +87,8 @@ export interface Prefs {
   mediaKeys: boolean;
   /** 三個角色各自對應到哪一顆耳機按鍵 */
   mediaMap: MediaKeyMap;
+  /** 兩個加分鍵跟著位置還是跟著人 */
+  mediaFollow: MediaFollow;
   /** 指定的播報語音；null 代表自動挑選中文語音。 */
   voiceURI: string | null;
   /** 播報語速。 */
@@ -106,6 +108,7 @@ export const DEFAULT_PREFS: Prefs = {
   stt: true,
   mediaKeys: false,
   mediaMap: DEFAULT_MEDIA_MAP,
+  mediaFollow: 'side',
   voiceURI: null,
   rate: 1.05,
   vocab: DEFAULT_VOCAB,
@@ -145,6 +148,7 @@ export function loadPrefs(): Prefs {
       stt: schema >= 2 && typeof v.stt === 'boolean' ? v.stt : DEFAULT_PREFS.stt,
       mediaKeys: typeof v.mediaKeys === 'boolean' ? v.mediaKeys : DEFAULT_PREFS.mediaKeys,
       mediaMap: readMediaMap(v.mediaMap),
+      mediaFollow: v.mediaFollow === 'player' ? 'player' : DEFAULT_PREFS.mediaFollow,
       voiceURI: typeof v.voiceURI === 'string' && v.voiceURI ? v.voiceURI : null,
       rate: typeof v.rate === 'number' && v.rate >= 0.6 && v.rate <= 1.6 ? v.rate : DEFAULT_PREFS.rate,
       vocab: readVocab(v.vocab),

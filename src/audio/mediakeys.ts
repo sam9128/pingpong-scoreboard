@@ -47,6 +47,15 @@ export type MediaKeyBinding =
 
 export type MediaKeyMap = Record<MediaKeyRole, MediaKeyBinding>;
 
+/**
+ * 兩個加分鍵指的是「位置」還是「人」。
+ *
+ * 每一局結束都要換邊，因此兩者在換邊之後會指到不同的人：
+ * - side   ——「上一首」永遠加畫面左半邊的分，換邊後就換成加給另一位選手
+ * - player ——「上一首」永遠加同一位選手的分，不管他這一局站在哪一邊
+ */
+export type MediaFollow = 'side' | 'player';
+
 /** 多數耳機：單擊 = 播放暫停、雙擊 = 下一首、三擊 = 上一首。 */
 export const DEFAULT_MEDIA_MAP: MediaKeyMap = {
   left: 'previoustrack',
