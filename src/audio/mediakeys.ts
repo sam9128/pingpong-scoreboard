@@ -72,12 +72,18 @@ export const MEDIA_BINDING_LABELS: Record<MediaKeyBinding, string> = {
   seekforward: '快轉',
 };
 
+/** 一次動作的下場：計分了／沒指派角色／被當成同一次按鍵的第二發。 */
+export type MediaKeyResult = 'ok' | 'unset' | 'dup';
+
 export interface MediaKeysOptions {
   onAction: (role: MediaKeyRole) => void;
   onStatus: (status: { active: boolean; message?: string }) => void;
   getMap: () => MediaKeyMap;
-  /** 實際收到的動作，給設定面板的診斷用 —— 沒收到跟收到了沒作用是兩回事。 */
-  onKey?: (action: MediaSessionAction) => void;
+  /**
+   * 實際收到的動作，給設定面板的診斷用 —— 「沒收到」「收到了但沒指派」
+   * 「收到了但被當成同一次按鍵」三種情況在畫面上長得一模一樣。
+   */
+  onKey?: (action: MediaSessionAction, result: MediaKeyResult) => void;
 }
 
 /** Chrome for Android 要求媒體長度 >= 5 秒才給 full audio focus，這裡取 8 秒。 */
@@ -228,7 +234,7 @@ export class MediaKeyScorer {
         action,
         role
           ? () => {
-              this.opts.onKey?.(action);
+              this.opts.onKey?.(action, 'ok');
               this.opts.onAction(role);
             }
           : null,
@@ -243,13 +249,19 @@ export class MediaKeyScorer {
     // 實體按鍵可能收到兩次 —— 短時間內只算一次。
     const ppRole = roleFor('playpause');
     const pp = (action: MediaSessionAction) => {
-      this.opts.onKey?.(action);
       if (this.el?.paused) this.scheduleResume();
       this.setPlaybackState('playing');
-      if (!ppRole) return;
+      if (!ppRole) {
+        this.opts.onKey?.(action, 'unset');
+        return;
+      }
       const now = Date.now();
-      if (now - this.lastPp < PP_DEDUPE_MS) return;
+      if (now - this.lastPp < PP_DEDUPE_MS) {
+        this.opts.onKey?.(action, 'dup');
+        return;
+      }
       this.lastPp = now;
+      this.opts.onKey?.(action, 'ok');
       this.opts.onAction(ppRole);
     };
     set('play', () => pp('play'));

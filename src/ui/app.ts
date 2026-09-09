@@ -24,7 +24,7 @@ import * as store from '../store';
 import { createWakeLock } from '../wakelock';
 import { createUpdater } from '../pwa';
 import { DEFAULT_MEDIA_MAP, MEDIA_BINDING_LABELS, MediaKeyScorer } from '../audio/mediakeys';
-import type { MediaKeyBinding, MediaKeyRole } from '../audio/mediakeys';
+import type { MediaKeyBinding, MediaKeyResult, MediaKeyRole } from '../audio/mediakeys';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => {
   const el = document.getElementById(id);
@@ -59,6 +59,13 @@ const MEDIA_ACTION_LABELS: Record<string, string> = {
   pause: '暫停',
   seekbackward: '倒轉',
   seekforward: '快轉',
+};
+
+/** 診斷用：這一發有沒有真的算成一次操作。 */
+const MEDIA_RESULT_MARKS: Record<MediaKeyResult, string> = {
+  ok: '✓',
+  unset: '（未指派）',
+  dup: '（當成同一次）',
 };
 
 const MAP_FIELDS: [MediaKeyRole, string][] = [
@@ -106,7 +113,7 @@ export class App {
   private readonly updater = createUpdater();
   private readonly mediaKeys: MediaKeyScorer;
   /** 最近收到的媒體動作，設定面板的診斷用。 */
-  private readonly mediaLog: string[] = [];
+  private readonly mediaLog: { action: string; result: MediaKeyResult; at: number }[] = [];
   /** 新版已下載但比賽正在進行，等回到首頁再套用。 */
   private updateDeferred = false;
 
@@ -126,7 +133,7 @@ export class App {
 
     this.mediaKeys = new MediaKeyScorer({
       getMap: () => this.prefs.mediaMap,
-      onKey: (action) => this.logMediaKey(action),
+      onKey: (action, result) => this.logMediaKey(action, result),
       onAction: (role) => {
         if (role === 'undo') {
           this.undoByGesture();
@@ -746,20 +753,30 @@ export class App {
    * 記下實際收到的媒體動作。耳機按了沒反應時，這裡能分辨是「按鍵根本沒送到
    * 頁面」還是「送到了但對應到不指定」—— 兩者的處置完全不同。
    */
-  private logMediaKey(action: string): void {
-    this.mediaLog.push(action);
-    if (this.mediaLog.length > 8) this.mediaLog.shift();
+  private logMediaKey(action: string, result: MediaKeyResult): void {
+    this.mediaLog.push({ action, result, at: Date.now() });
+    if (this.mediaLog.length > 6) this.mediaLog.shift();
     if (!$('settings').hidden) this.renderMediaDiag();
   }
 
+  /**
+   * 一次按鍵到底發生了什麼：收到哪個動作、距離上一次多久、有沒有真的計分。
+   * 間隔是關鍵 —— 按一下收到兩發（間隔很短）跟按兩下才收到一發，
+   * 要修的地方完全不同。
+   */
   private renderMediaDiag(): void {
     const el = $('mediaDiag');
     if (!this.mediaLog.length) {
       el.textContent = '按一下耳機按鍵，這裡會顯示實際收到的動作。';
       return;
     }
-    const seq = this.mediaLog.map((a) => MEDIA_ACTION_LABELS[a] ?? a).join(' → ');
-    el.textContent = `實際收到：${seq}`;
+    const seq = this.mediaLog.map((e, i) => {
+      const name = MEDIA_ACTION_LABELS[e.action] ?? e.action;
+      const prev = this.mediaLog[i - 1];
+      const gap = prev ? `+${((e.at - prev.at) / 1000).toFixed(1)}s ` : '';
+      return `${gap}${name}${MEDIA_RESULT_MARKS[e.result]}`;
+    });
+    el.textContent = `實際收到：${seq.join('　')}`;
   }
 
   private renderMediaMap(): void {

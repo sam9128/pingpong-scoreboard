@@ -245,13 +245,30 @@ describe('MediaKeyScorer', () => {
       onAction: () => undefined,
       onStatus: () => undefined,
       getMap: () => map,
-      onKey: (a) => seen.push(a),
+      onKey: (a, r) => seen.push(`${a}:${r}`),
     });
     await scorer.enable();
 
     handlers['nexttrack']?.();
     handlers['pause']?.();
-    expect(seen).toEqual(['nexttrack', 'pause']);
+    // 被當成同一次按鍵的第二發也要看得到，否則使用者只會覺得少算一分
+    handlers['play']?.();
+    expect(seen).toEqual(['nexttrack:ok', 'pause:ok', 'play:dup']);
+  });
+
+  it('沒有指派角色的播放暫停會回報「未指派」', async () => {
+    map = { left: 'previoustrack', right: 'nexttrack', undo: 'none' };
+    const seen: string[] = [];
+    const scorer = new MediaKeyScorer({
+      onAction: () => undefined,
+      onStatus: () => undefined,
+      getMap: () => map,
+      onKey: (a, r) => seen.push(`${a}:${r}`),
+    });
+    await scorer.enable();
+
+    handlers['pause']?.();
+    expect(seen).toEqual(['pause:unset']);
   });
 
   it('disable() 之後解除所有 handler，也不再自動接回', async () => {
