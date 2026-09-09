@@ -215,15 +215,23 @@ describe('MediaKeyScorer', () => {
     expect(got).toEqual(['undo', 'undo']);
   });
 
-  it('播報之後重新宣告 media session —— 只是還在播不夠', async () => {
+  it('播報之後重新宣告，但絕對不能把循環停掉', async () => {
     const scorer = makeScorer();
     await scorer.enable();
     const el = audios.at(-1);
     expect(el?.paused).toBe(false);
 
+    // 停一下再播會把 media session 弄斷，下一次按鍵就會被系統吃掉。
+    let paused = false;
+    const realPause = el!.pause.bind(el);
+    el!.pause = () => {
+      paused = true;
+      realPause();
+    };
+
     scorer.keepAlive(true);
     await vi.advanceTimersByTimeAsync(1000);
-    // 中間做過一次停→播的狀態轉換，結束時必須回到播放中。
+    expect(paused).toBe(false);
     expect(el?.paused).toBe(false);
     expect(navigator.mediaSession.playbackState).toBe('playing');
   });

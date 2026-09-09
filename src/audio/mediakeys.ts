@@ -84,6 +84,11 @@ export interface MediaKeysOptions {
    * 「收到了但被當成同一次按鍵」三種情況在畫面上長得一模一樣。
    */
   onKey?: (action: MediaSessionAction, result: MediaKeyResult) => void;
+  /**
+   * 循環與 media session 的狀態變化，跟按鍵排在同一條時間軸上 ——
+   * 按鍵沒送到頁面時，唯一的線索是它前後發生了什麼。
+   */
+  onNote?: (note: string) => void;
 }
 
 /** Chrome for Android 要求媒體長度 >= 5 秒才給 full audio focus，這裡取 8 秒。 */
@@ -142,7 +147,9 @@ export class MediaKeyScorer {
     // 系統或其他 App 搶走焦點時會把它暫停，暫停就等於失去 media session，
     // 按鍵也就停止作用 —— 只要使用者沒關掉就接回去。
     el.onpause = () => {
-      if (this.wanted) this.scheduleResume();
+      if (!this.wanted) return;
+      this.opts.onNote?.('循環被停');
+      this.scheduleResume();
     };
     this.el = el;
 
@@ -191,11 +198,11 @@ export class MediaKeyScorer {
    */
   keepAlive(force = false): void {
     if (!this.wanted || !this.el) return;
-    this.bindHandlers();
     if (this.el.paused) {
       this.scheduleResume();
       return;
     }
+    this.bindHandlers();
     if (force) this.scheduleReassert();
   }
 
@@ -332,6 +339,7 @@ export class MediaKeyScorer {
         if (ok) {
           this.retries = 0;
           this.setPlaybackState('playing');
+          this.opts.onNote?.('循環接回');
           return;
         }
         this.retries++;
@@ -341,8 +349,12 @@ export class MediaKeyScorer {
   }
 
   /**
-   * 重新製造一次播放狀態轉換 —— 對系統來說「剛開始播的那個」才是該收按鍵的，
-   * 這是網頁端唯一能主動把路由搶回來的手段。
+   * 播報結束後重新宣告一次自己。
+   *
+   * 這裡刻意**不**碰播放狀態：曾經試過 pause() 再 play() 想製造一次「剛開始播」
+   * 的轉換，結果是每播報一次就把 media session 弄斷一次，下一下按鍵會被系統
+   * 吃掉去做預設的恢復播放，根本送不到頁面 —— 症狀就是第一分按一下有效、
+   * 之後每一分都要按兩下。循環一旦在播，就讓它一路播下去。
    */
   private scheduleReassert(): void {
     if (this.reassertTimer !== null) return;
@@ -350,15 +362,12 @@ export class MediaKeyScorer {
       this.reassertTimer = null;
       const el = this.el;
       if (!this.wanted || !el) return;
-      // 自己按的暫停不要觸發重連邏輯，否則會排到兩次播放。
-      const onpause = el.onpause;
-      el.onpause = null;
-      el.pause();
-      el.onpause = onpause;
-      void this.play().then((ok) => {
-        if (ok) this.setPlaybackState('playing');
-        else if (this.wanted) this.scheduleResume();
-      });
+      this.opts.onNote?.('重新宣告');
+      if (el.paused) {
+        this.scheduleResume();
+        return;
+      }
+      this.bindHandlers();
     }, REASSERT_MS);
   }
 
@@ -366,8 +375,12 @@ export class MediaKeyScorer {
     if (this.watchTimer !== null) return;
     this.watchTimer = window.setInterval(() => {
       if (!this.wanted || !this.el) return;
-      if (this.el.paused) this.scheduleResume();
-      else this.setPlaybackState('playing');
+      if (this.el.paused) {
+        this.opts.onNote?.('循環停著');
+        this.scheduleResume();
+      } else {
+        this.setPlaybackState('playing');
+      }
     }, WATCH_MS);
   }
 

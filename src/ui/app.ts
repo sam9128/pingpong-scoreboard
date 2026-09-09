@@ -112,8 +112,8 @@ export class App {
   private readonly wake = createWakeLock();
   private readonly updater = createUpdater();
   private readonly mediaKeys: MediaKeyScorer;
-  /** 最近收到的媒體動作，設定面板的診斷用。 */
-  private readonly mediaLog: { action: string; result: MediaKeyResult; at: number }[] = [];
+  /** 最近的媒體事件時間軸，設定面板的診斷用。 */
+  private readonly mediaLog: { label: string; at: number }[] = [];
   /** 新版已下載但比賽正在進行，等回到首頁再套用。 */
   private updateDeferred = false;
 
@@ -133,7 +133,9 @@ export class App {
 
     this.mediaKeys = new MediaKeyScorer({
       getMap: () => this.prefs.mediaMap,
-      onKey: (action, result) => this.logMediaKey(action, result),
+      onKey: (action, result) =>
+        this.logMediaEvent(`${MEDIA_ACTION_LABELS[action] ?? action}${MEDIA_RESULT_MARKS[result]}`),
+      onNote: (note) => this.logMediaEvent(`〔${note}〕`),
       onAction: (role) => {
         if (role === 'undo') {
           this.undoByGesture();
@@ -157,7 +159,9 @@ export class App {
     this.announcer.onSpeakingChange = (speaking) => {
       if (speaking) {
         this.voice.pause();
+        this.logMediaEvent('〔播報開始〕');
       } else {
+        this.logMediaEvent('〔播報結束〕');
         this.voice.resume();
         // 播報會短暫搶走音訊焦點，回來要把 media session 重新宣告一次 ——
         // 只是「循環還在播」不夠，系統可能仍把耳機按鍵送給剛播完的那個，
@@ -753,9 +757,9 @@ export class App {
    * 記下實際收到的媒體動作。耳機按了沒反應時，這裡能分辨是「按鍵根本沒送到
    * 頁面」還是「送到了但對應到不指定」—— 兩者的處置完全不同。
    */
-  private logMediaKey(action: string, result: MediaKeyResult): void {
-    this.mediaLog.push({ action, result, at: Date.now() });
-    if (this.mediaLog.length > 6) this.mediaLog.shift();
+  private logMediaEvent(label: string): void {
+    this.mediaLog.push({ label, at: Date.now() });
+    if (this.mediaLog.length > 10) this.mediaLog.shift();
     if (!$('settings').hidden) this.renderMediaDiag();
   }
 
@@ -767,16 +771,15 @@ export class App {
   private renderMediaDiag(): void {
     const el = $('mediaDiag');
     if (!this.mediaLog.length) {
-      el.textContent = '按一下耳機按鍵，這裡會顯示實際收到的動作。';
+      el.textContent = '按一下耳機按鍵，這裡會顯示實際收到的動作與前後發生的事。';
       return;
     }
     const seq = this.mediaLog.map((e, i) => {
-      const name = MEDIA_ACTION_LABELS[e.action] ?? e.action;
       const prev = this.mediaLog[i - 1];
       const gap = prev ? `+${((e.at - prev.at) / 1000).toFixed(1)}s ` : '';
-      return `${gap}${name}${MEDIA_RESULT_MARKS[e.result]}`;
+      return `${gap}${e.label}`;
     });
-    el.textContent = `實際收到：${seq.join('　')}`;
+    el.textContent = `時間軸：${seq.join('　')}`;
   }
 
   private renderMediaMap(): void {
