@@ -101,6 +101,8 @@ const SAMPLE_RATE = 8000;
 const RETRY_STEPS = [0, 400, 900, 1800, 3000];
 /** 循環有沒有真的在播，畫面上看不出來，定期自己確認。 */
 const WATCH_MS = 2000;
+/** 重推播放狀態時，中間那一下「暫停」停留多久。 */
+const RESYNC_MS = 120;
 
 export class MediaKeyScorer {
   readonly supported: boolean;
@@ -182,6 +184,31 @@ export class MediaKeyScorer {
       this.url = null;
     }
     this.opts.onStatus({ active: false });
+  }
+
+  /**
+   * 播報結束後，把播放狀態重新推一次出去。
+   *
+   * 實機對照出來的結論：上一首、下一首、快轉這些**無狀態**的鍵，一下就有
+   * 反應；只有播放／暫停要按兩下。這顆鍵按下去送 PLAY 還是 PAUSE，是耳機
+   * 自己依它記得的播放狀態決定的 —— 記成「暫停中」就送 PLAY，而我們明明
+   * 在播，這一發就成了無效指令被系統吃掉；耳機接著把狀態改成「播放中」，
+   * 第二下才送出 PAUSE。播報會讓耳機那邊的狀態走鐘，所以每得一分就重演一次。
+   *
+   * 網頁這一端唯一能碰到這件事的，就是 playbackState 與 position ——
+   * 刻意走一次 paused → playing，逼系統把最新狀態推播給耳機。這不會動到
+   * 音訊：循環從頭到尾照播，音訊焦點也不會鬆手。
+   */
+  resyncState(): void {
+    const el = this.el;
+    if (!this.wanted || !el || el.paused) return;
+    this.opts.onNote?.('狀態重推');
+    this.setPlaybackState('paused');
+    window.setTimeout(() => {
+      if (!this.wanted || !this.el || this.el.paused) return;
+      this.setPlaybackState('playing');
+      this.setPositionState();
+    }, RESYNC_MS);
   }
 
   /**
@@ -292,6 +319,21 @@ export class MediaKeyScorer {
       navigator.mediaSession.metadata = new MediaMetadata({
         title: '乒乓球記分板',
         artist: '耳機按鍵計分中',
+      });
+    } catch {
+      /* 忽略 */
+    }
+  }
+
+  /** 位置資訊也是推播給耳機的一部分，一起送出去。 */
+  private setPositionState(): void {
+    const el = this.el;
+    if (!el) return;
+    try {
+      navigator.mediaSession.setPositionState?.({
+        duration: LOOP_SECONDS,
+        playbackRate: 1,
+        position: Math.min(el.currentTime || 0, LOOP_SECONDS),
       });
     } catch {
       /* 忽略 */

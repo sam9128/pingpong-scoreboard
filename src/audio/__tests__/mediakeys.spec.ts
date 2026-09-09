@@ -237,6 +237,46 @@ describe('MediaKeyScorer', () => {
     expect(navigator.mediaSession.playbackState).toBe('playing');
   });
 
+  it('重推播放狀態會走一次 paused → playing，但不碰音訊也不重註冊', async () => {
+    const scorer = makeScorer();
+    await scorer.enable();
+    const el = audios.at(-1);
+    const states: string[] = [];
+    const ms = navigator.mediaSession as unknown as { playbackState: string };
+    Object.defineProperty(ms, 'playbackState', {
+      configurable: true,
+      get: () => states.at(-1) ?? 'none',
+      set: (v: string) => states.push(v),
+    });
+    const before = binds;
+
+    scorer.resyncState();
+    await vi.advanceTimersByTimeAsync(500);
+
+    expect(states).toEqual(['paused', 'playing']);
+    // 循環不能停 —— 停了就是失去音訊焦點，那正是我們要避免的
+    expect(el?.paused).toBe(false);
+    expect(binds).toBe(before);
+  });
+
+  it('循環已經停了就不要重推，先把它接回來比較重要', async () => {
+    const scorer = makeScorer();
+    await scorer.enable();
+    const el = audios.at(-1);
+    if (el) el.paused = true;
+    const states: string[] = [];
+    const ms = navigator.mediaSession as unknown as { playbackState: string };
+    Object.defineProperty(ms, 'playbackState', {
+      configurable: true,
+      get: () => states.at(-1) ?? 'none',
+      set: (v: string) => states.push(v),
+    });
+
+    scorer.resyncState();
+    await vi.advanceTimersByTimeAsync(500);
+    expect(states).not.toContain('paused');
+  });
+
   it('循環在無人察覺時停掉，看門狗會把它接回來', async () => {
     const scorer = makeScorer();
     await scorer.enable();
