@@ -793,9 +793,10 @@ export class App {
     for (const [role, id] of MAP_FIELDS) {
       const sel = $<HTMLSelectElement>(id);
       sel.replaceChildren(
-        ...(Object.keys(MEDIA_BINDING_LABELS) as MediaKeyBinding[]).map(
-          (b) => new Option(MEDIA_BINDING_LABELS[b], b),
-        ),
+        ...(Object.keys(MEDIA_BINDING_LABELS) as MediaKeyBinding[])
+          // 連按兩下是蓋在加分鍵上的手勢，不是一顆鍵，只有復原能指派。
+          .filter((b) => b !== 'doubletap' || role === 'undo')
+          .map((b) => new Option(MEDIA_BINDING_LABELS[b], b)),
       );
       sel.value = this.prefs.mediaMap[role];
     }

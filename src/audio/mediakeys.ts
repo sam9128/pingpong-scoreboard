@@ -35,7 +35,11 @@ export type MediaKeyRole = 'left' | 'right' | 'undo';
  * 都由作業系統直接吃掉調整音量，不會送到頁面（keydown 也收不到）。
  *
  * playpause 是一顆實體鍵的兩個事件：循環正在播時按下去送 pause，反之送 play，
- * 因此兩個都要綁。
+ * 因此兩個都要綁。它在部分耳機上要按兩下才送得出去，那是耳機與 AVRCP 之間的
+ * 協商，網頁改不了 —— 那種耳機請改用 doubletap。
+ *
+ * doubletap 不是一顆實體鍵，而是蓋在加分鍵上的手勢：同一顆加分鍵在極短時間內
+ * 連按兩次，就當成「剛才那下按錯了」把它收回來。只有復原可以指派。
  */
 export type MediaKeyBinding =
   | 'none'
@@ -43,7 +47,8 @@ export type MediaKeyBinding =
   | 'nexttrack'
   | 'playpause'
   | 'seekbackward'
-  | 'seekforward';
+  | 'seekforward'
+  | 'doubletap';
 
 export type MediaKeyMap = Record<MediaKeyRole, MediaKeyBinding>;
 
@@ -70,6 +75,7 @@ export const MEDIA_BINDING_LABELS: Record<MediaKeyBinding, string> = {
   playpause: '播放／暫停',
   seekbackward: '倒轉',
   seekforward: '快轉',
+  doubletap: '連按兩下加分鍵',
 };
 
 /** 一次動作的下場：執行了，或是那顆鍵沒指派角色。 */
@@ -99,24 +105,25 @@ const SAMPLE_RATE = 8000;
  * 只有連續失敗（多半是別的 App 正握著音訊焦點）才逐步退讓。
  */
 const RETRY_STEPS = [0, 400, 900, 1800, 3000];
+/**
+ * 連按兩下的判定窗。
+ *
+ * 開得夠短才不會誤殺「補記兩分」：真實比賽裡同一位選手連得兩分，中間隔著
+ * 一整個來回，不可能落在半秒內。
+ */
+const DOUBLE_TAP_MS = 450;
 /** 循環有沒有真的在播，畫面上看不出來，定期自己確認。 */
 const WATCH_MS = 2000;
 /**
- * 對外宣告的播放狀態 —— 刻意跟真實情況相反。
+ * 對外宣告的播放狀態，跟真實情況一致。
  *
- * 實機對照：上一首、下一首這些無狀態的鍵一下就有反應，只有播放／暫停要按
- * 兩下。原因是這顆鍵送 PLAY 還是 PAUSE，由耳機依它記得的狀態決定：我們為了
- * 抓住音訊焦點把循環鎖在播放中，耳機那邊卻還記著「暫停中」，於是單擊送出
- * PLAY —— 系統一看已經在播，這是無效指令，直接吃掉，連頁面都到不了；耳機
- * 這才把狀態改成播放中，第二下送 PAUSE 才有效。
- *
- * 試過在播報後重推 paused → playing 去對齊耳機，沒有用。所以改成不再對齊：
- * 一律宣告自己是暫停中，耳機就永遠送 PLAY，而那永遠是有效指令。循環本身
- * 照播不誤 —— 音訊焦點看的是真的有沒有在發聲，不是這個欄位。
- *
- * 代價是通知列會顯示成播放鍵。要改回來只需要把這裡換成 'playing'。
+ * 播放／暫停那顆鍵在部分耳機上要按兩下才有效：它送 PLAY 還是 PAUSE 由耳機
+ * 依它記得的狀態決定，記錯了就送出無效指令，被系統吃掉、連頁面都到不了。
+ * 能碰的旋鈕只有這個欄位，兩個值都實測過 —— 宣告 playing、宣告 paused、
+ * 播報後重推去對齊，全都沒用。那段協商在耳機韌體與 AVRCP 之間，網頁碰不到，
+ * 所以不再嘗試，改用 doubletap 當復原。
  */
-const ADVERTISED_STATE: MediaSessionPlaybackState = 'paused';
+const ADVERTISED_STATE: MediaSessionPlaybackState = 'playing';
 
 export class MediaKeyScorer {
   readonly supported: boolean;
@@ -126,6 +133,8 @@ export class MediaKeyScorer {
   private wanted = false;
   private retryTimer: number | null = null;
   private retries = 0;
+  /** 上一次加分是哪一顆鍵、什麼時候，用來認出「連按兩下」。 */
+  private lastScore: { role: MediaKeyRole | null; at: number } = { role: null, at: 0 };
   private watchTimer: number | null = null;
 
   constructor(private opts: MediaKeysOptions) {
@@ -249,16 +258,11 @@ export class MediaKeyScorer {
       ['seekbackward', 'seekbackward'],
       ['seekforward', 'seekforward'],
     ] as [MediaKeyBinding, MediaSessionAction][]) {
+      // 沒指派角色的鍵也要註冊 handler。它什麼都不做，只留下紀錄 ——
+      // 不註冊的話那一發就永遠看不到，而「有送到但沒指派」跟「根本沒送到」
+      // 要修的地方完全不同。
       const role = roleFor(binding);
-      set(
-        action,
-        role
-          ? () => {
-              this.opts.onKey?.(action, 'ok');
-              this.opts.onAction(role);
-            }
-          : null,
-      );
+      set(action, () => (role ? this.score(action, role) : this.opts.onKey?.(action, 'unset')));
     }
 
     // 播放／暫停一律要接管：不接的話按下去會真的把循環停掉，連帶失去
@@ -275,11 +279,35 @@ export class MediaKeyScorer {
         this.opts.onKey?.(action, 'unset');
         return;
       }
-      this.opts.onKey?.(action, 'ok');
-      this.opts.onAction(ppRole);
+      this.score(action, ppRole);
     };
     set('play', () => pp('play'));
     set('pause', () => pp('pause'));
+  }
+
+  /**
+   * 加分鍵按下去了。
+   *
+   * 復原指派成 doubletap 時，同一顆鍵連按兩次代表「剛才那下按錯了」——
+   * 第一下照常加分（不能延遲，比分要立刻跟上），第二下把它收回來。
+   */
+  private score(action: MediaSessionAction, role: MediaKeyRole): void {
+    const now = Date.now();
+    if (
+      role !== 'undo' &&
+      this.opts.getMap().undo === 'doubletap' &&
+      this.lastScore.role === role &&
+      now - this.lastScore.at < DOUBLE_TAP_MS
+    ) {
+      this.lastScore = { role: null, at: 0 };
+      this.opts.onKey?.(action, 'ok');
+      this.opts.onNote?.('連按兩下→復原');
+      this.opts.onAction('undo');
+      return;
+    }
+    this.lastScore = role === 'undo' ? { role: null, at: 0 } : { role, at: now };
+    this.opts.onKey?.(action, 'ok');
+    this.opts.onAction(role);
   }
 
   private clearHandlers(): void {

@@ -138,9 +138,11 @@ describe('MediaKeyScorer', () => {
     handlers['seekbackward']?.();
     handlers['seekforward']?.();
     expect(got).toEqual(['left', 'right']);
-    // 沒有指派的按鍵不可以殘留舊的處理函式
-    expect(handlers['previoustrack']).toBeNull();
-    expect(handlers['nexttrack']).toBeNull();
+    // 沒有指派的按鍵仍然掛著 handler，但只留紀錄、不做事 ——
+    // 不註冊的話，那一發連「有送到」都看不出來
+    handlers['previoustrack']?.();
+    handlers['nexttrack']?.();
+    expect(got).toEqual(['left', 'right']);
   });
 
   it('沒有角色用 playpause 時，它仍然要接管，否則會失去 media session', async () => {
@@ -234,30 +236,52 @@ describe('MediaKeyScorer', () => {
     expect(paused).toBe(false);
     expect(el?.paused).toBe(false);
     expect(binds).toBe(before);
-    expect(navigator.mediaSession.playbackState).toBe('paused');
+    expect(navigator.mediaSession.playbackState).toBe('playing');
   });
 
-  it('對外一律宣告暫停中，但循環必須真的在播', async () => {
-    const scorer = makeScorer();
-    await scorer.enable();
-    const el = audios.at(-1);
-
-    // 宣告成暫停，耳機才會一直送 PLAY —— 那是唯一不會被系統吃掉的指令。
-    expect(navigator.mediaSession.playbackState).toBe('paused');
-    // 音訊焦點看的是真的有沒有在發聲，跟上面那個欄位無關。
-    expect(el?.paused).toBe(false);
-  });
-
-  it('宣告成暫停之後，play 這一發要能計分', async () => {
+  it('連按兩下加分鍵 = 復原，但只在復原指派成 doubletap 時', async () => {
+    map = { ...DEFAULT_MEDIA_MAP, undo: 'doubletap' };
     const got: string[] = [];
     const scorer = makeScorer((r) => got.push(r));
     await scorer.enable();
 
-    handlers['play']?.();
-    handlers['play']?.();
-    expect(got).toEqual(['undo', 'undo']);
-    // 收了 play 也不可以把宣告改掉，否則下一下又會被吃掉
-    expect(navigator.mediaSession.playbackState).toBe('paused');
+    // 第一下照常加分，比分要立刻跟上，不能為了等第二下而延遲。
+    handlers['nexttrack']?.();
+    expect(got).toEqual(['right']);
+
+    // 半秒內同一顆鍵再一下 = 剛才那下按錯了。
+    await vi.advanceTimersByTimeAsync(200);
+    handlers['nexttrack']?.();
+    expect(got).toEqual(['right', 'undo']);
+  });
+
+  it('隔得夠久或換一顆鍵，就是真的要加分', async () => {
+    map = { ...DEFAULT_MEDIA_MAP, undo: 'doubletap' };
+    const got: string[] = [];
+    const scorer = makeScorer((r) => got.push(r));
+    await scorer.enable();
+
+    // 一整個來回之後的第二分
+    handlers['nexttrack']?.();
+    await vi.advanceTimersByTimeAsync(600);
+    handlers['nexttrack']?.();
+    expect(got).toEqual(['right', 'right']);
+
+    // 立刻換另一邊得分，不是手勢
+    await vi.advanceTimersByTimeAsync(100);
+    handlers['previoustrack']?.();
+    expect(got).toEqual(['right', 'right', 'left']);
+  });
+
+  it('沒有指派 doubletap 時，連按兩下就是紮實的兩分', async () => {
+    const got: string[] = [];
+    const scorer = makeScorer((r) => got.push(r));
+    await scorer.enable();
+
+    handlers['nexttrack']?.();
+    await vi.advanceTimersByTimeAsync(100);
+    handlers['nexttrack']?.();
+    expect(got).toEqual(['right', 'right']);
   });
 
   it('循環在無人察覺時停掉，看門狗會把它接回來', async () => {

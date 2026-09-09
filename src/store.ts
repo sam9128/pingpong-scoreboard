@@ -172,6 +172,7 @@ function readMediaMap(v: unknown): MediaKeyMap {
     'playpause',
     'seekbackward',
     'seekforward',
+    'doubletap',
   ];
   const src = (typeof v === 'object' && v !== null ? v : {}) as Partial<MediaKeyMap>;
   const pick = (role: keyof MediaKeyMap): MediaKeyBinding =>
