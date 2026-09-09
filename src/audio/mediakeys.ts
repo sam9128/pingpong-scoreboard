@@ -101,8 +101,22 @@ const SAMPLE_RATE = 8000;
 const RETRY_STEPS = [0, 400, 900, 1800, 3000];
 /** 循環有沒有真的在播，畫面上看不出來，定期自己確認。 */
 const WATCH_MS = 2000;
-/** 重推播放狀態時，中間那一下「暫停」停留多久。 */
-const RESYNC_MS = 120;
+/**
+ * 對外宣告的播放狀態 —— 刻意跟真實情況相反。
+ *
+ * 實機對照：上一首、下一首這些無狀態的鍵一下就有反應，只有播放／暫停要按
+ * 兩下。原因是這顆鍵送 PLAY 還是 PAUSE，由耳機依它記得的狀態決定：我們為了
+ * 抓住音訊焦點把循環鎖在播放中，耳機那邊卻還記著「暫停中」，於是單擊送出
+ * PLAY —— 系統一看已經在播，這是無效指令，直接吃掉，連頁面都到不了；耳機
+ * 這才把狀態改成播放中，第二下送 PAUSE 才有效。
+ *
+ * 試過在播報後重推 paused → playing 去對齊耳機，沒有用。所以改成不再對齊：
+ * 一律宣告自己是暫停中，耳機就永遠送 PLAY，而那永遠是有效指令。循環本身
+ * 照播不誤 —— 音訊焦點看的是真的有沒有在發聲，不是這個欄位。
+ *
+ * 代價是通知列會顯示成播放鍵。要改回來只需要把這裡換成 'playing'。
+ */
+const ADVERTISED_STATE: MediaSessionPlaybackState = 'paused';
 
 export class MediaKeyScorer {
   readonly supported: boolean;
@@ -159,7 +173,8 @@ export class MediaKeyScorer {
     this.retries = 0;
     this.bindHandlers();
     this.setMetadata();
-    this.setPlaybackState('playing');
+    this.setPlaybackState(ADVERTISED_STATE);
+    this.setPositionState();
     this.startWatch();
     this.opts.onStatus({ active: true });
     return true;
@@ -187,31 +202,6 @@ export class MediaKeyScorer {
   }
 
   /**
-   * 播報結束後，把播放狀態重新推一次出去。
-   *
-   * 實機對照出來的結論：上一首、下一首、快轉這些**無狀態**的鍵，一下就有
-   * 反應；只有播放／暫停要按兩下。這顆鍵按下去送 PLAY 還是 PAUSE，是耳機
-   * 自己依它記得的播放狀態決定的 —— 記成「暫停中」就送 PLAY，而我們明明
-   * 在播，這一發就成了無效指令被系統吃掉；耳機接著把狀態改成「播放中」，
-   * 第二下才送出 PAUSE。播報會讓耳機那邊的狀態走鐘，所以每得一分就重演一次。
-   *
-   * 網頁這一端唯一能碰到這件事的，就是 playbackState 與 position ——
-   * 刻意走一次 paused → playing，逼系統把最新狀態推播給耳機。這不會動到
-   * 音訊：循環從頭到尾照播，音訊焦點也不會鬆手。
-   */
-  resyncState(): void {
-    const el = this.el;
-    if (!this.wanted || !el || el.paused) return;
-    this.opts.onNote?.('狀態重推');
-    this.setPlaybackState('paused');
-    window.setTimeout(() => {
-      if (!this.wanted || !this.el || this.el.paused) return;
-      this.setPlaybackState('playing');
-      this.setPositionState();
-    }, RESYNC_MS);
-  }
-
-  /**
    * 播報結束後確認循環還在播。
    *
    * 這裡刻意做得很少。曾經在每次播報後「重新宣告」自己 —— 停一下再播、
@@ -226,7 +216,7 @@ export class MediaKeyScorer {
       this.scheduleResume();
       return;
     }
-    this.setPlaybackState('playing');
+    this.setPlaybackState(ADVERTISED_STATE);
   }
 
   /** 設定改動之後重新套用對應表。 */
@@ -280,7 +270,7 @@ export class MediaKeyScorer {
     const ppRole = roleFor('playpause');
     const pp = (action: MediaSessionAction) => {
       if (this.el?.paused) this.scheduleResume();
-      this.setPlaybackState('playing');
+      this.setPlaybackState(ADVERTISED_STATE);
       if (!ppRole) {
         this.opts.onKey?.(action, 'unset');
         return;
@@ -367,7 +357,7 @@ export class MediaKeyScorer {
       void this.play().then((ok) => {
         if (ok) {
           this.retries = 0;
-          this.setPlaybackState('playing');
+          this.setPlaybackState(ADVERTISED_STATE);
           this.opts.onNote?.('循環接回');
           return;
         }
@@ -385,7 +375,7 @@ export class MediaKeyScorer {
         this.opts.onNote?.('循環停著');
         this.scheduleResume();
       } else {
-        this.setPlaybackState('playing');
+        this.setPlaybackState(ADVERTISED_STATE);
       }
     }, WATCH_MS);
   }

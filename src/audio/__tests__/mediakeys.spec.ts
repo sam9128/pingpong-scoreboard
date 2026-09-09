@@ -234,47 +234,30 @@ describe('MediaKeyScorer', () => {
     expect(paused).toBe(false);
     expect(el?.paused).toBe(false);
     expect(binds).toBe(before);
-    expect(navigator.mediaSession.playbackState).toBe('playing');
+    expect(navigator.mediaSession.playbackState).toBe('paused');
   });
 
-  it('重推播放狀態會走一次 paused → playing，但不碰音訊也不重註冊', async () => {
+  it('對外一律宣告暫停中，但循環必須真的在播', async () => {
     const scorer = makeScorer();
     await scorer.enable();
     const el = audios.at(-1);
-    const states: string[] = [];
-    const ms = navigator.mediaSession as unknown as { playbackState: string };
-    Object.defineProperty(ms, 'playbackState', {
-      configurable: true,
-      get: () => states.at(-1) ?? 'none',
-      set: (v: string) => states.push(v),
-    });
-    const before = binds;
 
-    scorer.resyncState();
-    await vi.advanceTimersByTimeAsync(500);
-
-    expect(states).toEqual(['paused', 'playing']);
-    // 循環不能停 —— 停了就是失去音訊焦點，那正是我們要避免的
+    // 宣告成暫停，耳機才會一直送 PLAY —— 那是唯一不會被系統吃掉的指令。
+    expect(navigator.mediaSession.playbackState).toBe('paused');
+    // 音訊焦點看的是真的有沒有在發聲，跟上面那個欄位無關。
     expect(el?.paused).toBe(false);
-    expect(binds).toBe(before);
   });
 
-  it('循環已經停了就不要重推，先把它接回來比較重要', async () => {
-    const scorer = makeScorer();
+  it('宣告成暫停之後，play 這一發要能計分', async () => {
+    const got: string[] = [];
+    const scorer = makeScorer((r) => got.push(r));
     await scorer.enable();
-    const el = audios.at(-1);
-    if (el) el.paused = true;
-    const states: string[] = [];
-    const ms = navigator.mediaSession as unknown as { playbackState: string };
-    Object.defineProperty(ms, 'playbackState', {
-      configurable: true,
-      get: () => states.at(-1) ?? 'none',
-      set: (v: string) => states.push(v),
-    });
 
-    scorer.resyncState();
-    await vi.advanceTimersByTimeAsync(500);
-    expect(states).not.toContain('paused');
+    handlers['play']?.();
+    handlers['play']?.();
+    expect(got).toEqual(['undo', 'undo']);
+    // 收了 play 也不可以把宣告改掉，否則下一下又會被吃掉
+    expect(navigator.mediaSession.playbackState).toBe('paused');
   });
 
   it('循環在無人察覺時停掉，看門狗會把它接回來', async () => {

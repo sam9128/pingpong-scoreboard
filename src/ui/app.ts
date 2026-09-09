@@ -166,9 +166,6 @@ export class App {
         // 只是「循環還在播」不夠，系統可能仍把耳機按鍵送給剛播完的那個，
         // 症狀是第一下沒反應、第二下才計分。
         this.mediaKeys.keepAlive();
-        // 播報會讓耳機那邊記的播放狀態走鐘，害下一下播放／暫停被當成無效
-        // 指令吃掉。把最新狀態重推一次給它。
-        this.mediaKeys.resyncState();
       }
     };
 
