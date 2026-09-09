@@ -72,16 +72,16 @@ export const MEDIA_BINDING_LABELS: Record<MediaKeyBinding, string> = {
   seekforward: '快轉',
 };
 
-/** 一次動作的下場：計分了／沒指派角色／被當成同一次按鍵的第二發。 */
-export type MediaKeyResult = 'ok' | 'unset' | 'dup';
+/** 一次動作的下場：執行了，或是那顆鍵沒指派角色。 */
+export type MediaKeyResult = 'ok' | 'unset';
 
 export interface MediaKeysOptions {
   onAction: (role: MediaKeyRole) => void;
   onStatus: (status: { active: boolean; message?: string }) => void;
   getMap: () => MediaKeyMap;
   /**
-   * 實際收到的動作，給設定面板的診斷用 —— 「沒收到」「收到了但沒指派」
-   * 「收到了但被當成同一次按鍵」三種情況在畫面上長得一模一樣。
+   * 實際收到的動作，給設定面板的診斷用 —— 「沒收到」跟「收到了但那顆鍵
+   * 沒指派角色」在畫面上長得一模一樣。
    */
   onKey?: (action: MediaSessionAction, result: MediaKeyResult) => void;
   /**
@@ -101,8 +101,6 @@ const SAMPLE_RATE = 8000;
 const RETRY_STEPS = [0, 400, 900, 1800, 3000];
 /** 循環有沒有真的在播，畫面上看不出來，定期自己確認。 */
 const WATCH_MS = 2000;
-/** 同一次實體按鍵有機會送出 play 與 pause 兩發，只能算一次。 */
-const PP_DEDUPE_MS = 300;
 
 export class MediaKeyScorer {
   readonly supported: boolean;
@@ -113,7 +111,6 @@ export class MediaKeyScorer {
   private retryTimer: number | null = null;
   private retries = 0;
   private watchTimer: number | null = null;
-  private lastPp = 0;
 
   constructor(private opts: MediaKeysOptions) {
     this.supported =
@@ -250,9 +247,9 @@ export class MediaKeyScorer {
     // 播放／暫停一律要接管：不接的話按下去會真的把循環停掉，連帶失去
     // media session，之後所有按鍵都會靜靜失效。有指派角色就順便執行。
     //
-    // 這顆鍵送過來的是 play 還是 pause 由系統看當下的播放狀態決定，兩個都要
-    // 綁；而我們被暫停後會立刻接回去，狀態一翻有機會補送另一發，因此同一次
-    // 實體按鍵可能收到兩次 —— 短時間內只算一次。
+    // 這顆鍵送過來的是 play 還是 pause，由系統看當下的播放狀態決定。兩發是
+    // 各自獨立的：收到哪一發就執行哪一發，不去猜它們是不是同一次按鍵 ——
+    // 猜錯的代價是使用者按了完全沒反應，比偶爾多算一次難查得多。
     const ppRole = roleFor('playpause');
     const pp = (action: MediaSessionAction) => {
       if (this.el?.paused) this.scheduleResume();
@@ -261,12 +258,6 @@ export class MediaKeyScorer {
         this.opts.onKey?.(action, 'unset');
         return;
       }
-      const now = Date.now();
-      if (now - this.lastPp < PP_DEDUPE_MS) {
-        this.opts.onKey?.(action, 'dup');
-        return;
-      }
-      this.lastPp = now;
       this.opts.onKey?.(action, 'ok');
       this.opts.onAction(ppRole);
     };

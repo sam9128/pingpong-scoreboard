@@ -65,7 +65,6 @@ const MEDIA_ACTION_LABELS: Record<string, string> = {
 const MEDIA_RESULT_MARKS: Record<MediaKeyResult, string> = {
   ok: '✓',
   unset: '（未指派）',
-  dup: '（當成同一次）',
 };
 
 const MAP_FIELDS: [MediaKeyRole, string][] = [

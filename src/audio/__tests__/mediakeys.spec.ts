@@ -202,20 +202,16 @@ describe('MediaKeyScorer', () => {
     expect(el?.paused).toBe(false);
   });
 
-  it('同一次按鍵送來 pause 再送 play 只算一分', async () => {
+  it('play 與 pause 各自獨立 —— 收到哪一發就執行哪一發', async () => {
     const got: string[] = [];
     const scorer = makeScorer((r) => got.push(r));
     await scorer.enable();
 
-    // 我們被暫停後會立刻接回去，狀態一翻系統可能補送另一發。
+    // 系統送 play 還是 pause 由當下的播放狀態決定，兩邊都必須有反應。
     handlers['pause']?.();
     handlers['play']?.();
-    expect(got).toEqual(['undo']);
-
-    // 隔得夠久就是真的按了第二下。
-    await vi.advanceTimersByTimeAsync(400);
     handlers['pause']?.();
-    expect(got).toEqual(['undo', 'undo']);
+    expect(got).toEqual(['undo', 'undo', 'undo']);
   });
 
   it('循環還在播時，播報結束不可以去擾動 media session', async () => {
@@ -264,9 +260,8 @@ describe('MediaKeyScorer', () => {
 
     handlers['nexttrack']?.();
     handlers['pause']?.();
-    // 被當成同一次按鍵的第二發也要看得到，否則使用者只會覺得少算一分
     handlers['play']?.();
-    expect(seen).toEqual(['nexttrack:ok', 'pause:ok', 'play:dup']);
+    expect(seen).toEqual(['nexttrack:ok', 'pause:ok', 'play:ok']);
   });
 
   it('沒有指派角色的播放暫停會回報「未指派」', async () => {
