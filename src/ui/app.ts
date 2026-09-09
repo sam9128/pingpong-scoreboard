@@ -166,7 +166,7 @@ export class App {
         // 播報會短暫搶走音訊焦點，回來要把 media session 重新宣告一次 ——
         // 只是「循環還在播」不夠，系統可能仍把耳機按鍵送給剛播完的那個，
         // 症狀是第一下沒反應、第二下才計分。
-        this.mediaKeys.keepAlive(true);
+        this.mediaKeys.keepAlive();
       }
     };
 

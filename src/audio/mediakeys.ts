@@ -101,8 +101,6 @@ const SAMPLE_RATE = 8000;
 const RETRY_STEPS = [0, 400, 900, 1800, 3000];
 /** 循環有沒有真的在播，畫面上看不出來，定期自己確認。 */
 const WATCH_MS = 2000;
-/** 播報結束到重新搶回 media session 之間的緩衝。 */
-const REASSERT_MS = 250;
 /** 同一次實體按鍵有機會送出 play 與 pause 兩發，只能算一次。 */
 const PP_DEDUPE_MS = 300;
 
@@ -115,7 +113,6 @@ export class MediaKeyScorer {
   private retryTimer: number | null = null;
   private retries = 0;
   private watchTimer: number | null = null;
-  private reassertTimer: number | null = null;
   private lastPp = 0;
 
   constructor(private opts: MediaKeysOptions) {
@@ -162,6 +159,8 @@ export class MediaKeyScorer {
 
     this.retries = 0;
     this.bindHandlers();
+    this.setMetadata();
+    this.setPlaybackState('playing');
     this.startWatch();
     this.opts.onStatus({ active: true });
     return true;
@@ -189,21 +188,21 @@ export class MediaKeyScorer {
   }
 
   /**
-   * 確認循環還在播，並且重新宣告自己是被路由的那個 media session。
+   * 播報結束後確認循環還在播。
    *
-   * 光是「還在播」不夠：Android 的語音播報自己也會去要音訊焦點，播完之後
-   * 系統仍可能把耳機按鍵送給它而不是我們 —— 症狀就是第一下按了沒反應、
-   * 第二下才計分。重新註冊 handler 與 metadata 可以把路由要回來，
-   * force 會再補一次播放狀態轉換，那是最強的一種宣告。
+   * 這裡刻意做得很少。曾經在每次播報後「重新宣告」自己 —— 停一下再播、
+   * 重註冊 handler、重建 metadata —— 想把耳機按鍵的路由搶回來，結果適得其反：
+   * 每得一分就擾動 media session 一次，下一下按鍵會被系統拿去做預設的恢復
+   * 播放，根本送不到頁面。實機時間軸也證實循環從頭到尾沒有被停過，
+   * 那些動作本來就沒有工作可做。循環在播就別碰它。
    */
-  keepAlive(force = false): void {
+  keepAlive(): void {
     if (!this.wanted || !this.el) return;
     if (this.el.paused) {
       this.scheduleResume();
       return;
     }
-    this.bindHandlers();
-    if (force) this.scheduleReassert();
+    this.setPlaybackState('playing');
   }
 
   /** 設定改動之後重新套用對應表。 */
@@ -273,9 +272,6 @@ export class MediaKeyScorer {
     };
     set('play', () => pp('play'));
     set('pause', () => pp('pause'));
-
-    this.setMetadata();
-    this.setPlaybackState('playing');
   }
 
   private clearHandlers(): void {
@@ -348,29 +344,6 @@ export class MediaKeyScorer {
     }, wait);
   }
 
-  /**
-   * 播報結束後重新宣告一次自己。
-   *
-   * 這裡刻意**不**碰播放狀態：曾經試過 pause() 再 play() 想製造一次「剛開始播」
-   * 的轉換，結果是每播報一次就把 media session 弄斷一次，下一下按鍵會被系統
-   * 吃掉去做預設的恢復播放，根本送不到頁面 —— 症狀就是第一分按一下有效、
-   * 之後每一分都要按兩下。循環一旦在播，就讓它一路播下去。
-   */
-  private scheduleReassert(): void {
-    if (this.reassertTimer !== null) return;
-    this.reassertTimer = window.setTimeout(() => {
-      this.reassertTimer = null;
-      const el = this.el;
-      if (!this.wanted || !el) return;
-      this.opts.onNote?.('重新宣告');
-      if (el.paused) {
-        this.scheduleResume();
-        return;
-      }
-      this.bindHandlers();
-    }, REASSERT_MS);
-  }
-
   private startWatch(): void {
     if (this.watchTimer !== null) return;
     this.watchTimer = window.setInterval(() => {
@@ -388,10 +361,6 @@ export class MediaKeyScorer {
     if (this.watchTimer !== null) {
       clearInterval(this.watchTimer);
       this.watchTimer = null;
-    }
-    if (this.reassertTimer !== null) {
-      clearTimeout(this.reassertTimer);
-      this.reassertTimer = null;
     }
   }
 

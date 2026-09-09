@@ -24,6 +24,7 @@ interface FakeAudio {
 }
 
 let handlers: Record<string, (() => void) | null> = {};
+let binds = 0;
 let audios: FakeAudio[] = [];
 let playShouldFail = false;
 let blobs: { type: string; size: number }[] = [];
@@ -57,6 +58,7 @@ function makeScorer(onAction: (r: MediaKeyRole) => void = () => undefined) {
 beforeEach(() => {
   vi.useFakeTimers();
   handlers = {};
+  binds = 0;
   audios = [];
   blobs = [];
   playShouldFail = false;
@@ -75,6 +77,7 @@ beforeEach(() => {
         metadata: null,
         playbackState: 'none',
         setActionHandler: (a: string, fn: (() => void) | null) => {
+          binds++;
           handlers[a] = fn;
         },
       },
@@ -215,24 +218,26 @@ describe('MediaKeyScorer', () => {
     expect(got).toEqual(['undo', 'undo']);
   });
 
-  it('播報之後重新宣告，但絕對不能把循環停掉', async () => {
+  it('循環還在播時，播報結束不可以去擾動 media session', async () => {
     const scorer = makeScorer();
     await scorer.enable();
     const el = audios.at(-1);
     expect(el?.paused).toBe(false);
 
-    // 停一下再播會把 media session 弄斷，下一次按鍵就會被系統吃掉。
+    // 停一下再播、或重註冊 handler，都會讓下一下按鍵被系統吃掉。
     let paused = false;
     const realPause = el!.pause.bind(el);
     el!.pause = () => {
       paused = true;
       realPause();
     };
+    const before = binds;
 
-    scorer.keepAlive(true);
+    scorer.keepAlive();
     await vi.advanceTimersByTimeAsync(1000);
     expect(paused).toBe(false);
     expect(el?.paused).toBe(false);
+    expect(binds).toBe(before);
     expect(navigator.mediaSession.playbackState).toBe('playing');
   });
 
