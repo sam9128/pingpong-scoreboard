@@ -49,6 +49,17 @@ const VOCAB_FIELDS: [keyof Vocabulary, string][] = [
 
 /** 雙擊判定的時間窗。太長會把連續得分誤判成雙擊，太短則不好按。 */
 const DOUBLE_TAP_MS = 260;
+/**
+ * 滑動要走多遠才算數。
+ *
+ * 記分時手指是點下去就起來，本來就會有一點位移；開得太小會把點擊誤判成
+ * 滑動，那比沒有這個手勢還糟 —— 使用者會看到分加到另一邊去。
+ */
+const SWIPE_MIN_PX = 56;
+/** 主方向要比另一個方向長這麼多倍，斜著滑不算，免得加分變成復原。 */
+const SWIPE_RATIO = 1.6;
+/** 超過這個時間就不是滑動，是按著不放之後才鬆手。 */
+const SWIPE_MAX_MS = 900;
 
 /** 三個可指派角色對應到設定畫面的下拉選單。 */
 /** 診斷用：把送進來的動作名稱講成人話。 */
@@ -320,6 +331,7 @@ export class App {
     this.bindCourt($('courtL'), 'left');
     this.bindCourt($('courtR'), 'right');
     this.bindGamesPanel();
+    this.bindSwipe();
 
     $('btnToL').addEventListener('click', (e) => {
       e.stopPropagation();
@@ -844,6 +856,64 @@ export class App {
   }
 
   /**
+   * 整個計分板上的滑動手勢：左右滑加分，上滑復原、下滑重做。
+   *
+   * 掛在 board 的捕獲階段，比兩側球場與局數面板的點擊處理更早拿到事件 ——
+   * 認出是滑動就把事件擋下來，那一下才不會又被當成點擊加一次分。
+   */
+  private bindSwipe(): void {
+    const el = $('board');
+    let from: { x: number; y: number; at: number; id: number } | null = null;
+
+    el.addEventListener(
+      'pointerdown',
+      (e) => {
+        // 按鈕自己有事情要做；多指觸控一律放棄，避免亂判方向。
+        if (from || (e.target instanceof HTMLElement && e.target.closest('button'))) {
+          from = null;
+          return;
+        }
+        from = { x: e.clientX, y: e.clientY, at: Date.now(), id: e.pointerId };
+      },
+      true,
+    );
+
+    const cancel = () => {
+      from = null;
+    };
+    el.addEventListener('pointercancel', cancel, true);
+
+    el.addEventListener(
+      'pointerup',
+      (e) => {
+        const start = from;
+        from = null;
+        if (!start || e.pointerId !== start.id) return;
+
+        const dx = e.clientX - start.x;
+        const dy = e.clientY - start.y;
+        const [adx, ady] = [Math.abs(dx), Math.abs(dy)];
+        const major = Math.max(adx, ady);
+        if (major < SWIPE_MIN_PX) return; // 位移太小 —— 這是點擊，讓它照常走
+
+        // 走了這麼遠就不是點擊了，先把事件擋下來，球場才不會再加一分。
+        // 就算接下來判不出方向也一樣擋 —— 斜著滑一段距離卻加了分，
+        // 比什麼都沒發生更難接受。
+        e.stopPropagation();
+        e.preventDefault();
+
+        if (Date.now() - start.at > SWIPE_MAX_MS) return;
+        if (major < Math.min(adx, ady) * SWIPE_RATIO) return; // 方向不夠明確
+
+        if (adx >= ady) this.addPoint(dx > 0 ? 'right' : 'left');
+        else if (dy < 0) this.undoByGesture();
+        else this.redoByGesture();
+      },
+      true,
+    );
+  }
+
+  /**
    * 手勢版的復原。設定面板裡的復原鍵按下去看得到畫面變化，這個手勢是隱形的，
    * 因此一定要給回饋 —— 順便留一個一鍵重做的出口。
    */
@@ -856,6 +926,19 @@ export class App {
     this.toast('已復原上一步', {
       label: '重做',
       onClick: () => this.redo(),
+    });
+  }
+
+  /** 手勢版的重做，跟復原一樣要給回饋，並留一個走回頭路的出口。 */
+  private redoByGesture(): void {
+    if (this.redoStack.length === 0) {
+      this.toast('沒有可以重做的動作');
+      return;
+    }
+    this.redo();
+    this.toast('已重做', {
+      label: '復原',
+      onClick: () => this.undo(),
     });
   }
 

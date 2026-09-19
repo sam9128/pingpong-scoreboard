@@ -954,6 +954,8 @@ button.ghost:active {
 
 .board {
   position: relative;
+  /* 上下滑是手勢，不能讓瀏覽器拿去做下拉重新整理或捲動。 */
+  touch-action: none;
   /* 挖孔吃掉的左右寬度要先扣掉，否則比分會被推到鏡頭底下。
      沒有挖孔的裝置上 --safe-x 為 0，數值與原本完全相同。 */
   --safe-x: max(env(safe-area-inset-left), env(safe-area-inset-right));
