@@ -1,5 +1,7 @@
 import { DEFAULT_VOCAB } from './audio/stt';
 import { DEFAULT_MEDIA_MAP } from './audio/mediakeys';
+import { DEFAULT_SWIPE_MAP } from './ui/swipe';
+import type { SwipeAction, SwipeMap } from './ui/swipe';
 import type { MediaFollow, MediaKeyBinding, MediaKeyMap } from './audio/mediakeys';
 import type { Vocabulary } from './audio/stt';
 import type { BestOf, MatchConfig, MatchEvent, PlayerIndex } from './rules/types';
@@ -89,6 +91,10 @@ export interface Prefs {
   mediaMap: MediaKeyMap;
   /** 兩個加分鍵跟著位置還是跟著人 */
   mediaFollow: MediaFollow;
+  /** 畫面滑動手勢開關 */
+  swipe: boolean;
+  /** 四個滑動方向各自做什麼 */
+  swipeMap: SwipeMap;
   /** 球權改用紅色底線（強光模式），並關閉色暈的呼吸與加深 */
   serveBar: boolean;
   /** 指定的播報語音；null 代表自動挑選中文語音。 */
@@ -111,6 +117,8 @@ export const DEFAULT_PREFS: Prefs = {
   mediaKeys: false,
   mediaMap: DEFAULT_MEDIA_MAP,
   mediaFollow: 'side',
+  swipe: true,
+  swipeMap: DEFAULT_SWIPE_MAP,
   serveBar: false,
   voiceURI: null,
   rate: 1.05,
@@ -152,6 +160,8 @@ export function loadPrefs(): Prefs {
       mediaKeys: typeof v.mediaKeys === 'boolean' ? v.mediaKeys : DEFAULT_PREFS.mediaKeys,
       mediaMap: readMediaMap(v.mediaMap),
       mediaFollow: v.mediaFollow === 'player' ? 'player' : DEFAULT_PREFS.mediaFollow,
+      swipe: typeof v.swipe === 'boolean' ? v.swipe : DEFAULT_PREFS.swipe,
+      swipeMap: readSwipeMap(v.swipeMap),
       serveBar: typeof v.serveBar === 'boolean' ? v.serveBar : DEFAULT_PREFS.serveBar,
       voiceURI: typeof v.voiceURI === 'string' && v.voiceURI ? v.voiceURI : null,
       rate: typeof v.rate === 'number' && v.rate >= 0.6 && v.rate <= 1.6 ? v.rate : DEFAULT_PREFS.rate,
@@ -180,6 +190,15 @@ function readMediaMap(v: unknown): MediaKeyMap {
       ? (src[role] as MediaKeyBinding)
       : DEFAULT_MEDIA_MAP[role];
   return { left: pick('left'), right: pick('right'), undo: pick('undo') };
+}
+
+/** 認不得的動作一律回退成預設值，理由同上。 */
+function readSwipeMap(v: unknown): SwipeMap {
+  const valid: SwipeAction[] = ['none', 'scoreLeft', 'scoreRight', 'undo', 'redo'];
+  const src = (typeof v === 'object' && v !== null ? v : {}) as Partial<SwipeMap>;
+  const pick = (dir: keyof SwipeMap): SwipeAction =>
+    valid.includes(src[dir] as SwipeAction) ? (src[dir] as SwipeAction) : DEFAULT_SWIPE_MAP[dir];
+  return { left: pick('left'), right: pick('right'), up: pick('up'), down: pick('down') };
 }
 
 /** 任一類別若空掉或格式不符，就回退成該類別的預設詞，避免整組指令失效。 */

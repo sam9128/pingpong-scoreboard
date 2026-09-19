@@ -225,6 +225,39 @@
 
           <div class="switch-row">
             <span class="switch-text">
+              <b>滑動手勢</b>
+              <small>在計分板上滑動計分；點擊與雙擊維持原本的作用。</small>
+            </span>
+            <button class="switch" id="swSwipe" role="switch" aria-checked="true">
+              <span class="switch-knob"></span>
+            </button>
+          </div>
+
+          <details class="set-details" id="swipeFields">
+            <summary>自訂滑動手勢</summary>
+            <div class="set-group">
+            <div class="set-row">
+              <label class="set-label" id="swipeLeftLabel" for="swipeLeft">向左滑</label>
+              <select class="set-select" id="swipeLeft"></select>
+            </div>
+            <div class="set-row">
+              <label class="set-label" id="swipeRightLabel" for="swipeRight">向右滑</label>
+              <select class="set-select" id="swipeRight"></select>
+            </div>
+            <div class="set-row">
+              <label class="set-label" id="swipeUpLabel" for="swipeUp">向上滑</label>
+              <select class="set-select" id="swipeUp"></select>
+            </div>
+            <div class="set-row">
+              <label class="set-label" id="swipeDownLabel" for="swipeDown">向下滑</label>
+              <select class="set-select" id="swipeDown"></select>
+            </div>
+            <button class="set-action" id="btnSwipeReset">還原預設手勢</button>
+            </div>
+          </details>
+
+          <div class="switch-row">
+            <span class="switch-text">
               <b>耳機按鍵計分</b>
               <small id="mediaKeysHint"
                 >用藍牙耳機的按鍵計分；連上耳機後語音播報也會改從耳機出聲。</small

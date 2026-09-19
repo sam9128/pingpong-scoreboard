@@ -24,6 +24,8 @@ import * as store from '../store';
 import { createWakeLock } from '../wakelock';
 import { createUpdater } from '../pwa';
 import { DEFAULT_MEDIA_MAP, MEDIA_BINDING_LABELS, MediaKeyScorer } from '../audio/mediakeys';
+import { DEFAULT_SWIPE_MAP, SWIPE_ACTION_LABELS, SWIPE_DIR_LABELS, readSwipe } from './swipe';
+import type { SwipeAction, SwipeDir } from './swipe';
 import type { MediaKeyBinding, MediaKeyResult, MediaKeyRole } from '../audio/mediakeys';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => {
@@ -49,17 +51,14 @@ const VOCAB_FIELDS: [keyof Vocabulary, string][] = [
 
 /** 雙擊判定的時間窗。太長會把連續得分誤判成雙擊，太短則不好按。 */
 const DOUBLE_TAP_MS = 260;
-/**
- * 滑動要走多遠才算數。
- *
- * 記分時手指是點下去就起來，本來就會有一點位移；開得太小會把點擊誤判成
- * 滑動，那比沒有這個手勢還糟 —— 使用者會看到分加到另一邊去。
- */
-const SWIPE_MIN_PX = 56;
-/** 主方向要比另一個方向長這麼多倍，斜著滑不算，免得加分變成復原。 */
-const SWIPE_RATIO = 1.6;
-/** 超過這個時間就不是滑動，是按著不放之後才鬆手。 */
-const SWIPE_MAX_MS = 900;
+
+/** 四個滑動方向各自對應到設定面板裡的哪一個下拉選單。 */
+const SWIPE_FIELDS: [SwipeDir, string][] = [
+  ['left', 'swipeLeft'],
+  ['right', 'swipeRight'],
+  ['up', 'swipeUp'],
+  ['down', 'swipeDown'],
+];
 
 /** 三個可指派角色對應到設定畫面的下拉選單。 */
 /** 診斷用：把送進來的動作名稱講成人話。 */
@@ -377,6 +376,29 @@ export class App {
     $('swStt').addEventListener('click', () => this.toggleStt());
     $('swMediaKeys').addEventListener('click', () => void this.toggleMediaKeys());
 
+    $('swSwipe').addEventListener('click', () => {
+      this.prefs.swipe = !this.prefs.swipe;
+      store.savePrefs(this.prefs);
+      this.renderSwipeMap();
+    });
+
+    for (const [dir, id] of SWIPE_FIELDS) {
+      $(id).addEventListener('change', () => {
+        this.prefs.swipeMap = {
+          ...this.prefs.swipeMap,
+          [dir]: $<HTMLSelectElement>(id).value as SwipeAction,
+        };
+        store.savePrefs(this.prefs);
+      });
+    }
+
+    $('btnSwipeReset').addEventListener('click', () => {
+      this.prefs.swipeMap = { ...DEFAULT_SWIPE_MAP };
+      store.savePrefs(this.prefs);
+      this.renderSwipeMap();
+      this.toast('已還原預設手勢');
+    });
+
     $('swServeBar').addEventListener('click', () => {
       this.prefs.serveBar = !this.prefs.serveBar;
       store.savePrefs(this.prefs);
@@ -556,6 +578,7 @@ export class App {
     this.renderVoiceDiag();
     this.renderMediaMap();
     this.renderMediaDiag();
+    this.renderSwipeMap();
     this.renderVocabFields();
     this.renderUpdateRow();
     ($('rngRate') as HTMLInputElement).value = String(this.announcer.rate);
@@ -793,6 +816,22 @@ export class App {
     el.textContent = `時間軸：${seq.join('　')}`;
   }
 
+  private renderSwipeMap(): void {
+    $('swSwipe').setAttribute('aria-checked', String(this.prefs.swipe));
+    $('swipeFields').hidden = !this.prefs.swipe;
+
+    for (const [dir, id] of SWIPE_FIELDS) {
+      const sel = $<HTMLSelectElement>(id);
+      sel.replaceChildren(
+        ...(Object.keys(SWIPE_ACTION_LABELS) as SwipeAction[]).map(
+          (a) => new Option(SWIPE_ACTION_LABELS[a], a),
+        ),
+      );
+      sel.value = this.prefs.swipeMap[dir];
+      $(`${id}Label`).textContent = SWIPE_DIR_LABELS[dir];
+    }
+  }
+
   private renderMediaMap(): void {
     const byPlayer = this.prefs.mediaFollow === 'player';
     $<HTMLSelectElement>('mapFollow').value = this.prefs.mediaFollow;
@@ -869,6 +908,7 @@ export class App {
       'pointerdown',
       (e) => {
         // 按鈕自己有事情要做；多指觸控一律放棄，避免亂判方向。
+        if (!this.prefs.swipe) return;
         if (from || (e.target instanceof HTMLElement && e.target.closest('button'))) {
           from = null;
           return;
@@ -890,24 +930,16 @@ export class App {
         from = null;
         if (!start || e.pointerId !== start.id) return;
 
-        const dx = e.clientX - start.x;
-        const dy = e.clientY - start.y;
-        const [adx, ady] = [Math.abs(dx), Math.abs(dy)];
-        const major = Math.max(adx, ady);
-        if (major < SWIPE_MIN_PX) return; // 位移太小 —— 這是點擊，讓它照常走
+        const verdict = readSwipe(e.clientX - start.x, e.clientY - start.y, Date.now() - start.at);
+        if (verdict === 'tap') return; // 位移太小 —— 這是點擊，讓它照常走
 
-        // 走了這麼遠就不是點擊了，先把事件擋下來，球場才不會再加一分。
-        // 就算接下來判不出方向也一樣擋 —— 斜著滑一段距離卻加了分，
-        // 比什麼都沒發生更難接受。
+        // 走了這麼遠就不是點擊了，把事件擋下來，球場才不會再加一分。
+        // 判不出方向也一樣擋，不然斜著滑一段距離卻加了分。
         e.stopPropagation();
         e.preventDefault();
+        if (verdict === 'unclear') return;
 
-        if (Date.now() - start.at > SWIPE_MAX_MS) return;
-        if (major < Math.min(adx, ady) * SWIPE_RATIO) return; // 方向不夠明確
-
-        if (adx >= ady) this.addPoint(dx > 0 ? 'right' : 'left');
-        else if (dy < 0) this.undoByGesture();
-        else this.redoByGesture();
+        this.runSwipe(this.prefs.swipeMap[verdict]);
       },
       true,
     );
@@ -927,6 +959,13 @@ export class App {
       label: '重做',
       onClick: () => this.redo(),
     });
+  }
+
+  private runSwipe(action: SwipeAction): void {
+    if (action === 'scoreLeft') this.addPoint('left');
+    else if (action === 'scoreRight') this.addPoint('right');
+    else if (action === 'undo') this.undoByGesture();
+    else if (action === 'redo') this.redoByGesture();
   }
 
   /** 手勢版的重做，跟復原一樣要給回饋，並留一個走回頭路的出口。 */
