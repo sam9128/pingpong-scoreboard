@@ -91,6 +91,8 @@ export interface Prefs {
   mediaMap: MediaKeyMap;
   /** 兩個加分鍵跟著位置還是跟著人 */
   mediaFollow: MediaFollow;
+  /** 開始比賽時自動進入全螢幕。關掉就不會跳瀏覽器的退出提示，但網址列會留著。 */
+  autoFullscreen: boolean;
   /** 畫面滑動手勢開關 */
   swipe: boolean;
   /** 四個滑動方向各自做什麼 */
@@ -117,6 +119,7 @@ export const DEFAULT_PREFS: Prefs = {
   mediaKeys: false,
   mediaMap: DEFAULT_MEDIA_MAP,
   mediaFollow: 'side',
+  autoFullscreen: true,
   swipe: true,
   swipeMap: DEFAULT_SWIPE_MAP,
   serveBar: false,
@@ -160,6 +163,8 @@ export function loadPrefs(): Prefs {
       mediaKeys: typeof v.mediaKeys === 'boolean' ? v.mediaKeys : DEFAULT_PREFS.mediaKeys,
       mediaMap: readMediaMap(v.mediaMap),
       mediaFollow: v.mediaFollow === 'player' ? 'player' : DEFAULT_PREFS.mediaFollow,
+      autoFullscreen:
+        typeof v.autoFullscreen === 'boolean' ? v.autoFullscreen : DEFAULT_PREFS.autoFullscreen,
       swipe: typeof v.swipe === 'boolean' ? v.swipe : DEFAULT_PREFS.swipe,
       swipeMap: readSwipeMap(v.swipeMap),
       serveBar: typeof v.serveBar === 'boolean' ? v.serveBar : DEFAULT_PREFS.serveBar,

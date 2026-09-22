@@ -293,7 +293,8 @@ export class App {
     // 全螢幕是兩件事的前提：Android 只有在全螢幕或已安裝的 PWA 才會把畫面
     // 畫進鏡頭挖孔區，否則系統一律補上黑邊；orientation.lock() 也多半要求
     // 全螢幕。這裡仍在「開始比賽」的使用者手勢中，失敗就靜默略過。
-    void enterFullscreenAndLock();
+    // 使用者關掉自動全螢幕時只試著鎖方向，不去觸發瀏覽器的退出提示。
+    void enterFullscreenAndLock(this.prefs.autoFullscreen);
 
     this.state = reduce(this.config, this.events);
     this.expeditePromptedForGame = -1;
@@ -380,6 +381,7 @@ export class App {
       this.prefs.swipe = !this.prefs.swipe;
       store.savePrefs(this.prefs);
       this.renderSwipeMap();
+    $('swAutoFs').setAttribute('aria-checked', String(this.prefs.autoFullscreen));
     });
 
     for (const [dir, id] of SWIPE_FIELDS) {
@@ -397,6 +399,12 @@ export class App {
       store.savePrefs(this.prefs);
       this.renderSwipeMap();
       this.toast('已還原預設手勢');
+    });
+
+    $('swAutoFs').addEventListener('click', () => {
+      this.prefs.autoFullscreen = !this.prefs.autoFullscreen;
+      store.savePrefs(this.prefs);
+      $('swAutoFs').setAttribute('aria-checked', String(this.prefs.autoFullscreen));
     });
 
     $('swServeBar').addEventListener('click', () => {
@@ -1523,10 +1531,10 @@ function bindSegmented(id: string): void {
  * 只在觸控裝置自動全螢幕 —— 桌機用一般視窗看板面是正常用法，不該因為按下
  * 「開始比賽」就被搶進全螢幕。被擋下不影響計分，設定裡仍有手動入口。
  */
-async function enterFullscreenAndLock(): Promise<void> {
+async function enterFullscreenAndLock(fullscreen: boolean): Promise<void> {
   const touch = window.matchMedia('(pointer: coarse)').matches;
   try {
-    if (touch && !document.fullscreenElement && !launchedFullscreen()) {
+    if (fullscreen && touch && !document.fullscreenElement && !launchedFullscreen()) {
       await document.documentElement.requestFullscreen({ navigationUI: 'hide' });
     }
   } catch {
