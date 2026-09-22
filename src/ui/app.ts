@@ -531,7 +531,7 @@ export class App {
 
     $('setFullscreen').addEventListener('click', async () => {
       try {
-        if (!document.fullscreenElement) {
+        if (!document.fullscreenElement && !launchedFullscreen()) {
           await document.documentElement.requestFullscreen();
         }
         const locked = await lockLandscape();
@@ -1526,13 +1526,27 @@ function bindSegmented(id: string): void {
 async function enterFullscreenAndLock(): Promise<void> {
   const touch = window.matchMedia('(pointer: coarse)').matches;
   try {
-    if (touch && !document.fullscreenElement) {
+    if (touch && !document.fullscreenElement && !launchedFullscreen()) {
       await document.documentElement.requestFullscreen({ navigationUI: 'hide' });
     }
   } catch {
     /* 使用者手勢過期或瀏覽器政策擋下都屬正常，靜默略過。 */
   }
   await lockLandscape();
+}
+
+/**
+ * 從主畫面圖示啟動時，視窗本來就是全螢幕（manifest 的 display: fullscreen）。
+ *
+ * 這時再呼叫 Fullscreen API 什麼都不會多做，只會多跳一次瀏覽器的
+ * 「向下滑動即可退出全螢幕」。那個提示網頁關不掉 —— 它刻意設計成關不掉，
+ * 防止網站用假的全螢幕冒充系統畫面 —— 唯一的辦法是不去觸發它。
+ *
+ * 只認 fullscreen、不認 standalone：standalone 還看得到系統狀態列，
+ * 呼叫 Fullscreen API 才藏得掉，那一下是有實際作用的。
+ */
+function launchedFullscreen(): boolean {
+  return window.matchMedia('(display-mode: fullscreen)').matches;
 }
 
 async function lockLandscape(): Promise<boolean> {
