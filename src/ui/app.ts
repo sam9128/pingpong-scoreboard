@@ -147,8 +147,10 @@ export class App {
       onKey: (action, result) =>
         this.logMediaEvent(`${MEDIA_ACTION_LABELS[action] ?? action}${MEDIA_RESULT_MARKS[result]}`),
       onNote: (note) => this.logMediaEvent(`〔${note}〕`),
-      onAction: (role) => {
+      onAction: (role, viaDoubleTap) => {
         if (role === 'undo') {
+          // 連按兩下認出來的復原不受間隔限制，那兩下本來就要靠得很近。
+          if (!this.passesGap(viaDoubleTap)) return;
           this.undoByGesture();
           return;
         }
@@ -981,23 +983,25 @@ export class App {
   }
 
   private runSwipe(action: SwipeAction): void {
-    if (action === 'scoreLeft' || action === 'scoreRight') {
-      if (!this.passesGap()) return;
-      this.addPoint(action === 'scoreLeft' ? 'left' : 'right');
-    } else if (action === 'undo') this.undoByGesture();
-    else if (action === 'redo') this.redoByGesture();
+    if (action === 'none') return;
+    if (!this.passesGap()) return;
+    if (action === 'scoreLeft') this.addPoint('left');
+    else if (action === 'scoreRight') this.addPoint('right');
+    else if (action === 'undo') this.undoByGesture();
+    else this.redoByGesture();
   }
 
   /**
-   * 滑動與耳機按鍵的加分節流。
+   * 滑動與耳機按鍵的節流：加分、復原、重做一律適用。
    *
-   * 只擋加分：復原與重做是修正動作，本來就可能要連按兩下，擋掉只會更難用；
-   * 耳機的「連按兩下復原」更是非靠得很近不可。真實比賽裡兩分之間隔著一整個
-   * 來回，所以擋掉的幾乎一定是手滑或按鍵彈跳。
+   * 真實比賽裡兩次動作之間隔著一整個來回，所以間隔內的第二次觸發幾乎一定是
+   * 手滑或按鍵彈跳。bypass 只留給耳機的「連按兩下加分鍵 = 復原」—— 那兩下
+   * 本來就要求靠得很近，擋掉整個手勢就沒了；但它仍然會把時間記下去，
+   * 緊接著的第三下一樣要等。
    */
-  private passesGap(): boolean {
+  private passesGap(bypass = false): boolean {
     const now = Date.now();
-    if (now - this.lastInputAt < this.prefs.inputGap) return false;
+    if (!bypass && now - this.lastInputAt < this.prefs.inputGap) return false;
     this.lastInputAt = now;
     return true;
   }

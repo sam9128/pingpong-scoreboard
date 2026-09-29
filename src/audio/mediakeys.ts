@@ -82,7 +82,11 @@ export const MEDIA_BINDING_LABELS: Record<MediaKeyBinding, string> = {
 export type MediaKeyResult = 'ok' | 'unset';
 
 export interface MediaKeysOptions {
-  onAction: (role: MediaKeyRole) => void;
+  /**
+   * viaDoubleTap 為真代表這是「連按兩下加分鍵」認出來的復原。呼叫端的節流
+   * 必須放它過去 —— 那兩下本來就要靠得很近，擋掉整個手勢就沒了。
+   */
+  onAction: (role: MediaKeyRole, viaDoubleTap?: boolean) => void;
   onStatus: (status: { active: boolean; message?: string }) => void;
   getMap: () => MediaKeyMap;
   /**
@@ -302,7 +306,7 @@ export class MediaKeyScorer {
       this.lastScore = { role: null, at: 0 };
       this.opts.onKey?.(action, 'ok');
       this.opts.onNote?.('連按兩下→復原');
-      this.opts.onAction('undo');
+      this.opts.onAction('undo', true);
       return;
     }
     this.lastScore = role === 'undo' ? { role: null, at: 0 } : { role, at: now };

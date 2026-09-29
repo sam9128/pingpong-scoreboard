@@ -239,6 +239,25 @@ describe('MediaKeyScorer', () => {
     expect(navigator.mediaSession.playbackState).toBe('playing');
   });
 
+  it('連按兩下認出來的復原會標記出來，呼叫端的節流才放得了行', async () => {
+    map = { ...DEFAULT_MEDIA_MAP, undo: 'doubletap' };
+    const got: [string, boolean | undefined][] = [];
+    const scorer = new MediaKeyScorer({
+      onAction: (r, viaDoubleTap) => got.push([r, viaDoubleTap]),
+      onStatus: () => undefined,
+      getMap: () => map,
+    });
+    await scorer.enable();
+
+    handlers['nexttrack']?.();
+    await vi.advanceTimersByTimeAsync(200);
+    handlers['nexttrack']?.();
+
+    expect(got[0]).toEqual(['right', undefined]);
+    // 沒有這個標記，節流會把第二下擋掉，整個手勢就失效了
+    expect(got[1]).toEqual(['undo', true]);
+  });
+
   it('連按兩下加分鍵 = 復原，但只在復原指派成 doubletap 時', async () => {
     map = { ...DEFAULT_MEDIA_MAP, undo: 'doubletap' };
     const got: string[] = [];
