@@ -121,6 +121,8 @@ export class App {
   private readonly wake = createWakeLock();
   private readonly updater = createUpdater();
   private readonly mediaKeys: MediaKeyScorer;
+  /** 上一次經由滑動或耳機按鍵加分的時間，用來擋重複觸發。 */
+  private lastInputAt = 0;
   /** 最近的媒體事件時間軸，設定面板的診斷用。 */
   private readonly mediaLog: { label: string; at: number }[] = [];
   /** 新版已下載但比賽正在進行，等回到首頁再套用。 */
@@ -150,6 +152,7 @@ export class App {
           this.undoByGesture();
           return;
         }
+        if (!this.passesGap()) return;
         // 跟著選手：不管這一局站在哪一邊，左鍵永遠加給選手 A、右鍵加給選手 B。
         // 跟著位置：加畫面上那一半邊的分，換邊之後就換成加給另一位。
         if (this.prefs.mediaFollow === 'player') {
@@ -381,7 +384,6 @@ export class App {
       this.prefs.swipe = !this.prefs.swipe;
       store.savePrefs(this.prefs);
       this.renderSwipeMap();
-    $('swAutoFs').setAttribute('aria-checked', String(this.prefs.autoFullscreen));
     });
 
     for (const [dir, id] of SWIPE_FIELDS) {
@@ -400,6 +402,12 @@ export class App {
       this.renderSwipeMap();
       this.toast('已還原預設手勢');
     });
+
+    $('rngInputGap').addEventListener('input', () => {
+      this.prefs.inputGap = Number(($('rngInputGap') as HTMLInputElement).value);
+      $('inputGapVal').textContent = formatGap(this.prefs.inputGap);
+    });
+    $('rngInputGap').addEventListener('change', () => store.savePrefs(this.prefs));
 
     $('swAutoFs').addEventListener('click', () => {
       this.prefs.autoFullscreen = !this.prefs.autoFullscreen;
@@ -591,6 +599,9 @@ export class App {
     this.renderUpdateRow();
     ($('rngRate') as HTMLInputElement).value = String(this.announcer.rate);
     $('rateVal').textContent = `${this.announcer.rate.toFixed(2)}×`;
+    ($('rngInputGap') as HTMLInputElement).value = String(this.prefs.inputGap);
+    $('inputGapVal').textContent = formatGap(this.prefs.inputGap);
+    $('swAutoFs').setAttribute('aria-checked', String(this.prefs.autoFullscreen));
     $('settings').hidden = false;
   }
 
@@ -970,10 +981,25 @@ export class App {
   }
 
   private runSwipe(action: SwipeAction): void {
-    if (action === 'scoreLeft') this.addPoint('left');
-    else if (action === 'scoreRight') this.addPoint('right');
-    else if (action === 'undo') this.undoByGesture();
+    if (action === 'scoreLeft' || action === 'scoreRight') {
+      if (!this.passesGap()) return;
+      this.addPoint(action === 'scoreLeft' ? 'left' : 'right');
+    } else if (action === 'undo') this.undoByGesture();
     else if (action === 'redo') this.redoByGesture();
+  }
+
+  /**
+   * 滑動與耳機按鍵的加分節流。
+   *
+   * 只擋加分：復原與重做是修正動作，本來就可能要連按兩下，擋掉只會更難用；
+   * 耳機的「連按兩下復原」更是非靠得很近不可。真實比賽裡兩分之間隔著一整個
+   * 來回，所以擋掉的幾乎一定是手滑或按鍵彈跳。
+   */
+  private passesGap(): boolean {
+    const now = Date.now();
+    if (now - this.lastInputAt < this.prefs.inputGap) return false;
+    this.lastInputAt = now;
+    return true;
   }
 
   /** 手勢版的重做，跟復原一樣要給回饋，並留一個走回頭路的出口。 */
@@ -1555,6 +1581,11 @@ async function enterFullscreenAndLock(fullscreen: boolean): Promise<void> {
  */
 function launchedFullscreen(): boolean {
   return window.matchMedia('(display-mode: fullscreen)').matches;
+}
+
+/** 0 要講成「不限制」，不然滑桿拉到底會顯示「0 ms」，看起來像壞掉。 */
+function formatGap(ms: number): string {
+  return ms === 0 ? '不限制' : `${ms} ms`;
 }
 
 async function lockLandscape(): Promise<boolean> {

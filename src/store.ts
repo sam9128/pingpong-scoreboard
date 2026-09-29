@@ -91,6 +91,13 @@ export interface Prefs {
   mediaMap: MediaKeyMap;
   /** 兩個加分鍵跟著位置還是跟著人 */
   mediaFollow: MediaFollow;
+  /**
+   * 滑動與耳機按鍵兩次加分之間的最短間隔（毫秒）。0 為不限制。
+   *
+   * 只擋加分。復原與重做不受限 —— 那是修正動作，而且耳機的「連按兩下復原」
+   * 本來就要求兩下靠得很近，擋掉的話整個手勢會失效。
+   */
+  inputGap: number;
   /** 開始比賽時自動進入全螢幕。關掉就不會跳瀏覽器的退出提示，但網址列會留著。 */
   autoFullscreen: boolean;
   /** 畫面滑動手勢開關 */
@@ -119,6 +126,7 @@ export const DEFAULT_PREFS: Prefs = {
   mediaKeys: false,
   mediaMap: DEFAULT_MEDIA_MAP,
   mediaFollow: 'side',
+  inputGap: 300,
   autoFullscreen: true,
   swipe: true,
   swipeMap: DEFAULT_SWIPE_MAP,
@@ -163,6 +171,10 @@ export function loadPrefs(): Prefs {
       mediaKeys: typeof v.mediaKeys === 'boolean' ? v.mediaKeys : DEFAULT_PREFS.mediaKeys,
       mediaMap: readMediaMap(v.mediaMap),
       mediaFollow: v.mediaFollow === 'player' ? 'player' : DEFAULT_PREFS.mediaFollow,
+      inputGap:
+        typeof v.inputGap === 'number' && v.inputGap >= 0 && v.inputGap <= 1000
+          ? Math.round(v.inputGap / 50) * 50
+          : DEFAULT_PREFS.inputGap,
       autoFullscreen:
         typeof v.autoFullscreen === 'boolean' ? v.autoFullscreen : DEFAULT_PREFS.autoFullscreen,
       swipe: typeof v.swipe === 'boolean' ? v.swipe : DEFAULT_PREFS.swipe,
